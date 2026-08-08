@@ -36,6 +36,15 @@ export function ensureDatabase() {
         id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, action TEXT NOT NULL,
         target TEXT NOT NULL, result TEXT NOT NULL, created_at BIGINT NOT NULL
       )`,
+      sql`CREATE TABLE IF NOT EXISTS email_replies (
+        id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, gmail_message_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL, company TEXT NOT NULL, subject TEXT NOT NULL,
+        sender TEXT NOT NULL, received_at BIGINT NOT NULL, status TEXT NOT NULL,
+        tone TEXT NOT NULL, summary TEXT NOT NULL, translation TEXT NOT NULL,
+        original TEXT NOT NULL, next_action TEXT NOT NULL, gmail_url TEXT NOT NULL,
+        updated_at BIGINT NOT NULL, UNIQUE(owner_email,gmail_message_id)
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS email_replies_owner_idx ON email_replies(owner_email, received_at DESC)`,
     ]);
   })().catch((error) => {
     initialized = null;
