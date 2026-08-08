@@ -3,6 +3,8 @@ import { db, ensureDatabase } from "../../../db";
 import { unseal } from "../../../lib/secret-store";
 import { getGoogleToken } from "../../../lib/google";
 
+function platformKey(source:string){return source.toLowerCase().replace(/[^a-z0-9]+/g,"")||"unknown";}
+
 function deliveryFor(source:string){
   if(/GitHub/i.test(source))return "github";
   if(/Hacker News/i.test(source))return "hackernews";
@@ -40,7 +42,9 @@ async function sendGmail(ownerEmail:string,to:string,subject:string,letter:strin
     body:JSON.stringify({raw}),
     cache:"no-store",
   });
+  const result=await response.json().catch(()=>({})) as {id?:string;threadId?:string};
   if(!response.ok)throw new Error("gmail_send_"+response.status);
+  return result;
 }
 
 export async function GET(){
@@ -48,8 +52,11 @@ export async function GET(){
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();
   const sql=db();
-  const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
-  return Response.json({applications:rows});
+  const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",platform_key AS "platformKey",delivery_state AS "deliveryState",receipt_id AS "receiptId",receipt_url AS "receiptUrl",delivered_at AS "deliveredAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
+  const events=await sql`SELECT id,application_id AS "applicationId",event_type AS "eventType",status,message,evidence_id AS "evidenceId",evidence_url AS "evidenceUrl",created_at AS "createdAt" FROM application_events WHERE owner_email=${user.email} ORDER BY created_at ASC`;
+  const byApplication=new Map<string,any[]>();
+  for(const event of events as any[]){const list=byApplication.get(event.applicationId)||[];list.push(event);byApplication.set(event.applicationId,list);}
+  return Response.json({applications:(rows as any[]).map(row=>({...row,events:byApplication.get(row.id)||[]}))});
 }
 
 export async function POST(request:Request){
@@ -72,6 +79,11 @@ export async function POST(request:Request){
   let status=channel==="github"?"awaiting_github_authorization":channel==="hackernews"?"manual_submission_required":"detecting_destination";
   let deliveryError="";
   let destination="";
+  const platform=platformKey(body.gig.source||"");
+  let deliveryState="queued";
+  let receiptId="";
+  let receiptUrl="";
+  let deliveredAt:number|null=null;
 
   if(channel==="github"){
     const target=githubIssue(body.gig.sourceUrl);
@@ -87,8 +99,9 @@ export async function POST(request:Request){
           body:JSON.stringify({body:body.coverLetter}),
           cache:"no-store",
         });
+        const result=await response.json().catch(()=>({})) as {id?:number;html_url?:string};
         if(!response.ok)throw new Error(`github_${response.status}`);
-        status="submitted";
+        status="submitted";deliveryState="platform_accepted";receiptId=String(result.id||"");receiptUrl=result.html_url||"";deliveredAt=Date.now();
       }catch(error){
         status="submission_failed";
         deliveryError=error instanceof Error?error.message:"github_failed";
@@ -100,8 +113,8 @@ export async function POST(request:Request){
       channel="gmail";
       destination=email;
       try{
-        await sendGmail(user.email,email,"Application: "+body.gig.title,body.coverLetter);
-        status="submitted";
+        const result=await sendGmail(user.email,email,"Application: "+body.gig.title,body.coverLetter);
+        status="submitted";deliveryState="platform_accepted";receiptId=result.id||"";receiptUrl=result.id?`https://mail.google.com/mail/u/0/#sent/${result.id}`:"";deliveredAt=Date.now();
       }catch(error){
         status="submission_failed";
         deliveryError=error instanceof Error?error.message:"gmail_failed";
@@ -110,7 +123,8 @@ export async function POST(request:Request){
   }
 
   await sql.transaction([
-    sql`INSERT INTO applications (id,owner_email,gig_id,source,source_url,title,language,proposed_rate,application_letter,status,delivery_channel,destination,last_error,created_at,updated_at) VALUES (${id},${user.email},${body.gig.id},${body.gig.source},${body.gig.sourceUrl},${body.gig.title},${body.language},${body.quote},${body.coverLetter},${status},${channel},${destination},${deliveryError},${now},${now})`,
+    sql`INSERT INTO applications (id,owner_email,gig_id,source,source_url,title,language,proposed_rate,application_letter,status,delivery_channel,destination,last_error,platform_key,delivery_state,receipt_id,receipt_url,delivered_at,created_at,updated_at) VALUES (${id},${user.email},${body.gig.id},${body.gig.source},${body.gig.sourceUrl},${body.gig.title},${body.language},${body.quote},${body.coverLetter},${status},${channel},${destination},${deliveryError},${platform},${deliveryState},${receiptId},${receiptUrl},${deliveredAt},${now},${now})`,
+    sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${id},${"delivery_attempt"},${status},${deliveryState==="platform_accepted"?"平台接口已确认接收申请":deliveryError?"投递失败："+deliveryError:"任务已建立，等待下一步"},${receiptId},${receiptUrl},${now})`,
     sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_processed"},${id},${deliveryError||status},${now})`,
   ]);
   return Response.json({id,status,deliveryChannel:channel,createdAt:now,error:deliveryError||undefined},{status:201});
