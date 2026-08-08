@@ -17,7 +17,30 @@ export async function GET(){
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();
   const sql=db();
-  const rows=await sql`SELECT provider,status,account_label AS "accountLabel",scopes,updated_at AS "updatedAt" FROM channel_connections WHERE owner_email=${user.email}`;
+  const [rows,sessions]=await Promise.all([
+    sql`SELECT provider,status,account_label AS "accountLabel",scopes,updated_at AS "updatedAt" FROM channel_connections WHERE owner_email=${user.email}`,
+    sql`SELECT platform_key AS "platformKey",status,account_label AS "accountLabel",auth_method AS "authMethod",site_url AS "siteUrl",verified_at AS "verifiedAt",last_checked_at AS "lastCheckedAt",expires_at AS "expiresAt",updated_at AS "updatedAt" FROM platform_sessions WHERE owner_email=${user.email} ORDER BY updated_at DESC`
+  ]);
   const saved=new Map(rows.map((x:any)=>[x.provider,x]));
-  return Response.json({owner:user.email,channels:channels.map(channel=>({...channel,...(saved.get(channel.id)??{})}))});
+  const resolvedChannels=channels.map(channel=>({...channel,...(saved.get(channel.id)??{})}));
+  const names=new Map(channels.map(channel=>[channel.id,channel.name]));
+  const authenticated=new Map<string,any>();
+  for(const channel of resolvedChannels){
+    if(channel.status==="connected")authenticated.set(channel.id,{
+      platformKey:channel.id,name:channel.name,status:"connected",sessionType:"oauth",
+      accountLabel:channel.accountLabel||user.email,lastCheckedAt:channel.updatedAt,updatedAt:channel.updatedAt,
+      note:"OAuth 授权可持续复用，除非授权被撤销或令牌失效。"
+    });
+  }
+  for(const session of sessions as any[]){
+    const expired=Boolean(session.expiresAt&&Number(session.expiresAt)<=Date.now());
+    const item={
+      ...session,name:names.get(session.platformKey)||session.platformKey,
+      status:expired?"expired":session.status,sessionType:session.authMethod||"browser_session",
+      note:expired?"登录会话已到复查时间；下次投递前需要重新验证。":"浏览器登录会被同平台任务复用；网站退出、撤销或 Cookie 过期后需重新登录一次。"
+    };
+    const existing=authenticated.get(session.platformKey);
+    if(!existing||existing.status!=="connected")authenticated.set(session.platformKey,item);
+  }
+  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()]});
 }
