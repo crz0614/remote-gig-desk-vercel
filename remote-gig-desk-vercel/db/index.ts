@@ -54,6 +54,12 @@ export function ensureDatabase() {
         scopes TEXT, updated_at BIGINT NOT NULL,
         UNIQUE(owner_email, provider)
       )`,
+      sql`CREATE TABLE IF NOT EXISTS browser_agents (
+        id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE, status TEXT NOT NULL,
+        last_seen_at BIGINT, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS browser_agents_owner_idx ON browser_agents(owner_email, updated_at DESC)`,
       sql`CREATE TABLE IF NOT EXISTS oauth_states (
         state TEXT PRIMARY KEY, owner_email TEXT NOT NULL, provider TEXT NOT NULL,
         verifier TEXT, expires_at BIGINT NOT NULL
