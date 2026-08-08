@@ -1,3 +1,4 @@
+import { createHash, randomBytes, randomUUID } from "crypto";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
 
@@ -42,5 +43,44 @@ export async function GET(){
     const existing=authenticated.get(session.platformKey);
     if(!existing||existing.status!=="connected")authenticated.set(session.platformKey,item);
   }
-  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()]});
+  const agents=await sql`SELECT id,name,status,last_seen_at AS "lastSeenAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM browser_agents WHERE owner_email=${user.email} ORDER BY updated_at DESC`;
+  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents:agents});
+}
+
+
+function tokenHash(token:string){return createHash("sha256").update(token).digest("hex");}
+
+export async function POST(request:Request){
+  await ensureDatabase();
+  const sql=db();
+  const body=await request.json().catch(()=>({}));
+  const auth=request.headers.get("authorization")||"";
+  if(auth.startsWith("Bearer ")){
+    const token=auth.slice(7).trim();
+    const rows=await sql`SELECT id,owner_email AS "ownerEmail" FROM browser_agents WHERE token_hash=${tokenHash(token)} LIMIT 1`;
+    const agent=rows[0] as any;
+    if(!agent)return Response.json({error:"invalid_agent_token"},{status:401});
+    const now=Date.now();
+    await sql`UPDATE browser_agents SET status=${"online"},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
+    if(body.action==="record_session"){
+      const platformKey=String(body.platformKey||"").toLowerCase().replace(/[^a-z0-9_-]/g,"");
+      if(!platformKey)return Response.json({error:"platform_required"},{status:400});
+      await sql`INSERT INTO platform_sessions(id,owner_email,platform_key,status,verified_at,updated_at,account_label,auth_method,site_url,last_checked_at)
+        VALUES(${randomUUID()},${agent.ownerEmail},${platformKey},${"verified"},${now},${now},${String(body.accountLabel||"")},${"browser_extension"},${String(body.siteUrl||"")},${now})
+        ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verified"},verified_at=${now},updated_at=${now},account_label=${String(body.accountLabel||"")},auth_method=${"browser_extension"},site_url=${String(body.siteUrl||"")},last_checked_at=${now}`;
+    }
+    return Response.json({ok:true,agentId:agent.id,heartbeatAt:now});
+  }
+  const user=await getChatGPTUser();
+  if(!user)return Response.json({error:"sign_in_required"},{status:401});
+  if(body.action!=="create_browser_agent")return Response.json({error:"unsupported_action"},{status:400});
+  const token=randomBytes(32).toString("base64url");
+  const id=randomUUID(); const now=Date.now();
+  await sql`INSERT INTO browser_agents(id,owner_email,name,token_hash,status,created_at,updated_at)
+    VALUES(${id},${user.email},${String(body.name||"我的 Chrome")},${tokenHash(token)},${"waiting"},${now},${now})`;
+  return Response.json({id,token,name:String(body.name||"我的 Chrome"),status:"waiting"});
+}
+
+export async function OPTIONS(){
+  return new Response(null,{status:204,headers:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type","Access-Control-Allow-Methods":"POST,OPTIONS"}});
 }
