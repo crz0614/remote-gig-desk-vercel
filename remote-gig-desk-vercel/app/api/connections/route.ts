@@ -44,7 +44,8 @@ export async function GET(){
     if(!existing||existing.status!=="connected")authenticated.set(session.platformKey,item);
   }
   const agents=await sql`SELECT id,name,status,last_seen_at AS "lastSeenAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM browser_agents WHERE owner_email=${user.email} ORDER BY updated_at DESC`;
-  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents:agents});
+  const browserAgents=(agents as any[]).map(agent=>({...agent,status:agent.lastSeenAt&&Date.now()-Number(agent.lastSeenAt)<120000?"online":"offline"}));
+  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents});
 }
 
 
