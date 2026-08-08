@@ -21,6 +21,8 @@ export function ensureDatabase() {
         application_letter TEXT NOT NULL, status TEXT NOT NULL,
         delivery_channel TEXT NOT NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
       )`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS destination TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS last_error TEXT`,
       sql`CREATE INDEX IF NOT EXISTS applications_owner_idx ON applications(owner_email, updated_at DESC)`,
       sql`CREATE TABLE IF NOT EXISTS channel_connections (
         id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, provider TEXT NOT NULL,
