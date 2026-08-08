@@ -48,7 +48,7 @@ export async function GET(){
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();
   const sql=db();
-  const rows=await sql\`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=\${user.email} ORDER BY updated_at DESC LIMIT 100\`;
+  const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
   return Response.json({applications:rows});
 }
 
@@ -63,7 +63,7 @@ export async function POST(request:Request){
   let channel=deliveryFor(body.gig.source||"");
   const sql=db();
 
-  const existing=await sql\`SELECT id,status,delivery_channel AS "deliveryChannel",created_at AS "createdAt" FROM applications WHERE owner_email=\${user.email} AND gig_id=\${body.gig.id} ORDER BY created_at DESC LIMIT 1\`;
+  const existing=await sql`SELECT id,status,delivery_channel AS "deliveryChannel",created_at AS "createdAt" FROM applications WHERE owner_email=${user.email} AND gig_id=${body.gig.id} ORDER BY created_at DESC LIMIT 1`;
   if(existing.length){
     const row=existing[0] as any;
     return Response.json({id:row.id,status:row.status,deliveryChannel:row.deliveryChannel,createdAt:row.createdAt,duplicate:true});
@@ -74,18 +74,18 @@ export async function POST(request:Request){
 
   if(channel==="github"){
     const target=githubIssue(body.gig.sourceUrl);
-    const connections=await sql\`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=\${user.email} AND provider=\${"github"} AND status=\${"connected"} LIMIT 1\`;
+    const connections=await sql`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=${user.email} AND provider=${"github"} AND status=${"connected"} LIMIT 1`;
     const tokenCiphertext=(connections[0] as any)?.tokenCiphertext as string|undefined;
     if(target&&tokenCiphertext){
       try{
         const token=await unseal(tokenCiphertext);
-        const response=await fetch(\`https://api.github.com/repos/\${target.owner}/\${target.repo}/issues/\${target.issue}/comments\`,{
+        const response=await fetch(`https://api.github.com/repos/${target.owner}/${target.repo}/issues/${target.issue}/comments`,{
           method:"POST",
-          headers:{Authorization:\`Bearer \${token}\`,Accept:"application/vnd.github+json","Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"},
+          headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json","Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"},
           body:JSON.stringify({body:body.coverLetter}),
           cache:"no-store",
         });
-        if(!response.ok)throw new Error(\`github_\${response.status}\`);
+        if(!response.ok)throw new Error(`github_${response.status}`);
         status="submitted";
       }catch(error){
         status="submission_failed";
@@ -107,8 +107,8 @@ export async function POST(request:Request){
   }
 
   await sql.transaction([
-    sql\`INSERT INTO applications (id,owner_email,gig_id,source,source_url,title,language,proposed_rate,application_letter,status,delivery_channel,created_at,updated_at) VALUES (\${id},\${user.email},\${body.gig.id},\${body.gig.source},\${body.gig.sourceUrl},\${body.gig.title},\${body.language},\${body.quote},\${body.coverLetter},\${status},\${channel},\${now},\${now})\`,
-    sql\`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (\${crypto.randomUUID()},\${user.email},\${"application_processed"},\${id},\${deliveryError||status},\${now})\`,
+    sql`INSERT INTO applications (id,owner_email,gig_id,source,source_url,title,language,proposed_rate,application_letter,status,delivery_channel,created_at,updated_at) VALUES (${id},${user.email},${body.gig.id},${body.gig.source},${body.gig.sourceUrl},${body.gig.title},${body.language},${body.quote},${body.coverLetter},${status},${channel},${now},${now})`,
+    sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_processed"},${id},${deliveryError||status},${now})`,
   ]);
   return Response.json({id,status,deliveryChannel:channel,createdAt:now,error:deliveryError||undefined},{status:201});
 }
