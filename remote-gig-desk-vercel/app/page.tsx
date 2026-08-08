@@ -102,6 +102,7 @@ export default function Home(){
   const [saved,setSaved]=useState<string[]>([]); const [applied,setApplied]=useState<string[]>([]); const [selected,setSelected]=useState<Gig|null>(null);
   const [checked,setChecked]=useState<string[]>([]); const [applicationPack,setApplicationPack]=useState<ApplicationPack|null>(null); const [batchPacks,setBatchPacks]=useState<ApplicationPack[]>([]);
   const [connections,setConnections]=useState<ChannelConnection[]>([]); const [queueing,setQueueing]=useState(false); const [queueNotice,setQueueNotice]=useState<{id:string;status:string;channel:string}|null>(null);
+  const [batchResult,setBatchResult]=useState<{total:number;success:number;failed:number}|null>(null);
   const [selectedReply,setSelectedReply]=useState<Reply|null>(null);
   const [translation,setTranslation]=useState(""); const [translatedTitle,setTranslatedTitle]=useState(""); const [translating,setTranslating]=useState(false); const [showOriginal,setShowOriginal]=useState(false);
 
@@ -112,7 +113,27 @@ export default function Home(){
   const markApplied=(id:string)=>setApplied(v=>{const n=v.includes(id)?v:[...v,id];localStorage.setItem('gig-applied',JSON.stringify(n));return n;});
   const toggleChecked=(id:string)=>setChecked(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
   const startApplication=(gig:Gig)=>{setApplicationPack(createApplicationPack(gig));setSelected(null);};
-  const prepareBatch=()=>{const packs=gigs.filter(g=>checked.includes(g.id)).map(createApplicationPack);setBatchPacks(packs);setApplicationPack(packs[0]||null);};
+  const prepareBatch=async()=>{
+    if(queueing||!checked.length)return;
+    const packs=gigs.filter(g=>checked.includes(g.id)).map(createApplicationPack);
+    setQueueing(true);setBatchResult(null);setQueueNotice(null);
+    const results=await Promise.all(packs.map(async pack=>{
+      try{
+        const r=await fetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pack)});
+        if(!r.ok)throw new Error();
+        const result=await r.json();
+        return {ok:true,gigId:pack.gig.id,id:result.id};
+      }catch{return {ok:false,gigId:pack.gig.id,id:''};}
+    }));
+    const successful=results.filter(x=>x.ok).map(x=>x.gigId);
+    if(successful.length){
+      setApplied(v=>{const n=[...new Set([...v,...successful])];localStorage.setItem('gig-applied',JSON.stringify(n));return n;});
+      setChecked(v=>v.filter(id=>!successful.includes(id)));
+    }
+    setBatchPacks([]);setApplicationPack(null);
+    setBatchResult({total:packs.length,success:successful.length,failed:packs.length-successful.length});
+    setQueueing(false);
+  };
   const confirmPack=async(pack:ApplicationPack)=>{setQueueing(true);setQueueNotice(null);try{const r=await fetch('/api/applications',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(pack)});if(!r.ok)throw new Error();const result=await r.json();markApplied(pack.gig.id);setQueueNotice({id:result.id,status:result.status,channel:result.deliveryChannel});setBatchPacks(v=>v.filter(x=>x.gig.id!==pack.gig.id));setChecked(v=>v.filter(id=>id!==pack.gig.id));}catch{setQueueNotice({id:'',status:'queue_failed',channel:'none'});}finally{setQueueing(false);}};
   const gigs=data?.gigs??[];
   const visible=useMemo(()=>{let v=activeTab==='收藏'?gigs.filter(g=>saved.includes(g.id)):activeTab==='进度'?gigs.filter(g=>applied.includes(g.id)):gigs;if(query)v=v.filter(g=>`${g.title} ${g.summary} ${g.skills.join(' ')}`.toLowerCase().includes(query.toLowerCase()));if(filter==='最新')v=[...v].sort((a,b)=>+new Date(b.publishedAt)-+new Date(a.publishedAt));if(filter==='低竞争')v=v.filter(g=>g.competition==='低');if(filter==='高预算')v=v.filter(g=>g.budget!=='预算面议');return v;},[gigs,activeTab,saved,applied,query,filter]);
@@ -130,7 +151,8 @@ export default function Home(){
       <section className="quick-stats" aria-label="项目概览"><div><b>{gigs.length}</b><span>实时结果</span></div><div><b>{gigs.filter(g=>g.competition==='低').length}</b><span>低竞争</span></div><div><b>{applied.length}</b><span>已投递</span></div></section>
       <div className="search-row"><div className="searchbox"><Icon name="search"/><input aria-label="搜索项目" value={query} onChange={e=>setQuery(e.target.value)} placeholder="搜索 Python、LLM、Java…"/></div><button className="tune" aria-label="刷新" onClick={load}><span/><span/><span/></button></div>
       <div className="filters" role="tablist">{['推荐','最新','低竞争','高预算'].map(x=><button key={x} className={filter===x?'active':''} onClick={()=>setFilter(x)}>{x}</button>)}</div>
-      {checked.length>0&&<div className="batch-bar"><span>已选择 <b>{checked.length}</b> 个岗位</span><button onClick={prepareBatch}>一键批量申请</button></div>}
+      {checked.length>0&&<div className="batch-bar"><span>已选择 <b>{checked.length}</b> 个岗位</span><button disabled={queueing} onClick={prepareBatch}>{queueing?'正在分别生成并建立任务…':'一键批量申请'}</button></div>}
+      {batchResult&&<div className={`queue-result ${batchResult.failed?'failed':'saved'}`}>批量处理完成：已为 {batchResult.success}/{batchResult.total} 个岗位分别生成定制材料并建立申请任务{batchResult.failed?`，${batchResult.failed} 个失败，可保留选择后重试。`:'。'}<small>不会再跳转到第一个岗位；任务状态请在“进度”中查看。</small></div>}
     </>}
     <section className="section-head"><div><h2>{activeTab==='机会'?'真实机会':activeTab==='收藏'?`${visible.length} 个已收藏项目`:activeTab==='进度'?`${visible.length} 个已进入队列的项目`:activeTab==='连接'?'逐个平台接入':activeTab==='回复'?`${applicationReplies.length} 条申请邮件`:'工作台设置'}</h2><p>{activeTab==='机会'?'每条均可打开原始发布页':activeTab==='连接'?'仅显示经过后端验证的真实状态':activeTab==='回复'?'已排除职位提醒和营销邮件':'申请记录已保存到服务器'}</p></div>{activeTab==='机会'&&<button onClick={load}>刷新 <Icon name="arrow"/></button>}</section>
     <section className="gig-list">
