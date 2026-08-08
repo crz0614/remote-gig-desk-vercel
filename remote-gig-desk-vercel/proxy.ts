@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
+  const auth = request.headers.get("authorization");
+
+  // Paired Chrome agents use a revocable bearer token on this route.
+  // The route itself validates the token hash before accepting a heartbeat.
+  if (
+    request.nextUrl.pathname === "/api/connections" &&
+    (request.method === "OPTIONS" || auth?.startsWith("Bearer "))
+  ) {
+    return NextResponse.next();
+  }
+
   const expectedUser = process.env.WORKBENCH_USER;
   const expectedPassword = process.env.WORKBENCH_PASSWORD;
   if (!expectedUser || !expectedPassword) {
     return new NextResponse("Workbench authentication is not configured", { status: 503 });
   }
-  const auth = request.headers.get("authorization");
   if (auth?.startsWith("Basic ")) {
     const decoded = atob(auth.slice(6));
     const split = decoded.indexOf(":");
