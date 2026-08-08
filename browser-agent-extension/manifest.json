@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Remote Gig Desk Browser Agent",
+  "version": "0.1.0",
+  "description": "Safely reuses this Chrome profile's existing job-platform sessions without uploading passwords or cookies.",
+  "permissions": [
+    "storage",
+    "cookies",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://remote-gig-desk-vercel.vercel.app/*",
+    "https://news.ycombinator.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "options_page": "options.html",
+  "action": {
+    "default_title": "Remote Gig Desk Agent"
+  }
+}
