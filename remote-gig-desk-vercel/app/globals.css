@@ -54,3 +54,5 @@ svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8;
 @media(min-width:700px){.app-shell{margin:24px auto;min-height:calc(100vh - 48px);border-radius:32px}.bottom-nav{bottom:24px;border-radius:0 0 32px 32px}}
 @media(max-width:365px){.app-shell{padding-left:13px;padding-right:13px}.hero-card{padding:18px}.score-ring{width:78px;height:78px;flex-basis:78px}.hero-card h2{font-size:22px}}
 .oauth-connect{display:flex;align-items:center;justify-content:center;min-height:46px;border-radius:14px;background:var(--green);color:white;text-decoration:none;font-size:12px;font-weight:850;box-shadow:0 7px 16px #08704e2b}
+
+.progress-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}.progress-actions button{border:1px solid #0b855f;background:#edf8f4;color:#076646;border-radius:12px;padding:10px 12px;font-weight:700}.progress-actions button:disabled{opacity:.55}.progress-actions .danger-action{border-color:#d9a7a0;background:#fff4f2;color:#9d2f23}
