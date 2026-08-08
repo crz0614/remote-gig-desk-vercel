@@ -49,6 +49,7 @@ export async function GET(){
 }
 
 
+const agentCors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type","Access-Control-Allow-Methods":"POST,OPTIONS"};
 function tokenHash(token:string){return createHash("sha256").update(token).digest("hex");}
 
 export async function POST(request:Request){
@@ -60,7 +61,7 @@ export async function POST(request:Request){
     const token=auth.slice(7).trim();
     const rows=await sql`SELECT id,owner_email AS "ownerEmail" FROM browser_agents WHERE token_hash=${tokenHash(token)} LIMIT 1`;
     const agent=rows[0] as any;
-    if(!agent)return Response.json({error:"invalid_agent_token"},{status:401});
+    if(!agent)return Response.json({error:"invalid_agent_token"},{status:401,headers:agentCors});
     const now=Date.now();
     await sql`UPDATE browser_agents SET status=${"online"},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
     if(body.action==="record_session"){
@@ -70,7 +71,7 @@ export async function POST(request:Request){
         VALUES(${randomUUID()},${agent.ownerEmail},${platformKey},${"verified"},${now},${now},${String(body.accountLabel||"")},${"browser_extension"},${String(body.siteUrl||"")},${now})
         ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verified"},verified_at=${now},updated_at=${now},account_label=${String(body.accountLabel||"")},auth_method=${"browser_extension"},site_url=${String(body.siteUrl||"")},last_checked_at=${now}`;
     }
-    return Response.json({ok:true,agentId:agent.id,heartbeatAt:now});
+    return Response.json({ok:true,agentId:agent.id,heartbeatAt:now},{headers:agentCors});
   }
   const user=await getChatGPTUser();
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
@@ -83,5 +84,5 @@ export async function POST(request:Request){
 }
 
 export async function OPTIONS(){
-  return new Response(null,{status:204,headers:{"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,content-type","Access-Control-Allow-Methods":"POST,OPTIONS"}});
+  return new Response(null,{status:204,headers:agentCors});
 }
