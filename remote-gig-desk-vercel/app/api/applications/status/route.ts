@@ -1,35 +1,48 @@
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../../db";
 
-const transitions: Record<string, string> = {
-  mark_submitted: "submitted",
-  needs_verification: "verification_required",
-  reopen: "detecting_destination",
-  cancel: "cancelled",
-};
-
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ error: "请先登录" }, { status: 401 });
-
   const body = (await request.json().catch(() => null)) as { id?: string; action?: string } | null;
-  const nextStatus = body?.action ? transitions[body.action] : undefined;
-  if (!body?.id || !nextStatus) return Response.json({ error: "任务编号或操作无效" }, { status: 400 });
-
+  if (!body?.id || !body.action) return Response.json({ error: "任务编号或操作无效" }, { status: 400 });
   await ensureDatabase();
   const sql = db();
+  const current = await sql`SELECT id,platform_key AS "platformKey",status FROM applications WHERE id=${body.id} AND owner_email=${user.email} LIMIT 1`;
+  if (!current.length) return Response.json({ error: "未找到该申请任务" }, { status: 404 });
+  const platformKey = String((current[0] as any).platformKey || "unknown");
   const now = Date.now();
-  const rows = await sql`
-    UPDATE applications
-    SET status = ${nextStatus}, updated_at = ${now}
-    WHERE id = ${body.id} AND owner_email = ${user.email}
-    RETURNING id, status, delivery_channel AS "deliveryChannel", updated_at AS "updatedAt"
-  `;
-  if (!rows.length) return Response.json({ error: "未找到该申请任务" }, { status: 404 });
+  let status = String((current[0] as any).status);
+  let message = "";
+  let affectedIds: string[] = [body.id];
 
-  await sql`
-    INSERT INTO audit_events (id, owner_email, action, target, result, created_at)
-    VALUES (${crypto.randomUUID()}, ${user.email}, ${"application_status_changed"}, ${body.id}, ${nextStatus}, ${now})
-  `;
-  return Response.json({ application: rows[0] });
+  if (body.action === "needs_verification") {
+    status = "verification_required";
+    await sql`INSERT INTO platform_sessions (id,owner_email,platform_key,status,updated_at) VALUES (${crypto.randomUUID()},${user.email},${platformKey},${status},${now}) ON CONFLICT (owner_email,platform_key) DO UPDATE SET status=EXCLUDED.status,updated_at=EXCLUDED.updated_at`;
+    const affected = await sql`UPDATE applications SET status=${status},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status IN (${"detecting_destination"},${"manual_submission_required"},${"submission_failed"},${"verification_required"}) RETURNING id`;
+    affectedIds = (affected as any[]).map(row => String(row.id));
+    message = "该平台队列已统一暂停，只需完成一次登录或验证码";
+  } else if (body.action === "verify_platform") {
+    status = "manual_submission_required";
+    await sql`INSERT INTO platform_sessions (id,owner_email,platform_key,status,verified_at,updated_at) VALUES (${crypto.randomUUID()},${user.email},${platformKey},${"verified"},${now},${now}) ON CONFLICT (owner_email,platform_key) DO UPDATE SET status=EXCLUDED.status,verified_at=EXCLUDED.verified_at,updated_at=EXCLUDED.updated_at`;
+    const affected = await sql`UPDATE applications SET status=${status},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status=${"verification_required"} RETURNING id`;
+    affectedIds = (affected as any[]).map(row => String(row.id));
+    message = "平台验证已记录，同平台任务无需再次验证";
+  } else if (body.action === "mark_submitted") {
+    status = "manual_confirmed";
+    message = "你已确认在原平台完成提交；尚无平台接口回执";
+    await sql`UPDATE applications SET status=${status},delivery_state=${"user_confirmed"},last_error=${""},updated_at=${now} WHERE id=${body.id} AND owner_email=${user.email}`;
+  } else if (body.action === "cancel") {
+    status = "cancelled";
+    message = "申请任务已取消";
+    await sql`UPDATE applications SET status=${status},updated_at=${now} WHERE id=${body.id} AND owner_email=${user.email}`;
+  } else {
+    return Response.json({ error: "不支持的操作" }, { status: 400 });
+  }
+
+  for (const applicationId of affectedIds) {
+    await sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,created_at) VALUES (${crypto.randomUUID()},${user.email},${applicationId},${"status_changed"},${status},${message},${now})`;
+  }
+  await sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_status_changed"},${body.id},${status},${now})`;
+  return Response.json({ application: { id: body.id, status, platformKey }, affectedCount: affectedIds.length });
 }
