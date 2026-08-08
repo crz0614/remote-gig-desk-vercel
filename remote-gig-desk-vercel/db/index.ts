@@ -23,7 +23,25 @@ export function ensureDatabase() {
       )`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS destination TEXT`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS last_error TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS platform_key TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivery_state TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS receipt_id TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS receipt_url TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivered_at BIGINT`,
+      sql`UPDATE applications SET platform_key=lower(regexp_replace(source, ${"[^a-zA-Z0-9]+"}, ${""}, ${"g"})) WHERE platform_key IS NULL OR platform_key=${""}`,
       sql`CREATE INDEX IF NOT EXISTS applications_owner_idx ON applications(owner_email, updated_at DESC)`,
+      sql`CREATE INDEX IF NOT EXISTS applications_platform_idx ON applications(owner_email, platform_key, updated_at DESC)`,
+      sql`CREATE TABLE IF NOT EXISTS application_events (
+        id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, application_id TEXT NOT NULL,
+        event_type TEXT NOT NULL, status TEXT NOT NULL, message TEXT NOT NULL,
+        evidence_id TEXT, evidence_url TEXT, created_at BIGINT NOT NULL
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS application_events_idx ON application_events(owner_email, application_id, created_at ASC)`,
+      sql`CREATE TABLE IF NOT EXISTS platform_sessions (
+        id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, platform_key TEXT NOT NULL,
+        status TEXT NOT NULL, verified_at BIGINT, updated_at BIGINT NOT NULL,
+        UNIQUE(owner_email, platform_key)
+      )`,
       sql`CREATE TABLE IF NOT EXISTS channel_connections (
         id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, provider TEXT NOT NULL,
         status TEXT NOT NULL, account_label TEXT, token_ciphertext TEXT,
