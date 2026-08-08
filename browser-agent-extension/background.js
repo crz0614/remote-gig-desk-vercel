@@ -21,5 +21,5 @@ async function sync(){
 chrome.runtime.onInstalled.addListener(()=>{chrome.runtime.openOptionsPage();sync();});
 chrome.alarms.create("gig-desk-heartbeat",{periodInMinutes:1});
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name==="gig-desk-heartbeat")sync();});
-chrome.storage.onChanged.addListener(()=>sync());
+chrome.storage.onChanged.addListener(changes=>{if(changes.agentToken||changes.hnUsername)sync();});
 sync();
