@@ -82,6 +82,11 @@ export async function POST() {
     const now = Date.now();
     const applicationId = matchApplication(subject, original, applications);
     await sql`INSERT INTO email_replies (id,owner_email,gmail_message_id,thread_id,company,subject,sender,received_at,status,tone,summary,translation,original,next_action,gmail_url,updated_at,application_id) VALUES (${crypto.randomUUID()},${user.email},${item.id},${item.threadId},${company},${subject},${sender},${receivedAt},${result.status},${result.tone},${result.summary},${translated || "翻译暂时不可用，请查看英文原文。"},${original},${result.next},${`https://mail.google.com/mail/u/0/#all/${item.id}`},${now},${applicationId}) ON CONFLICT (owner_email,gmail_message_id) DO UPDATE SET company=EXCLUDED.company,subject=EXCLUDED.subject,sender=EXCLUDED.sender,received_at=EXCLUDED.received_at,status=EXCLUDED.status,tone=EXCLUDED.tone,summary=EXCLUDED.summary,translation=EXCLUDED.translation,original=EXCLUDED.original,next_action=EXCLUDED.next_action,gmail_url=EXCLUDED.gmail_url,updated_at=EXCLUDED.updated_at,application_id=EXCLUDED.application_id`;
+    if(applicationId){
+      const gmailUrl=`https://mail.google.com/mail/u/0/#all/${item.id}`;
+      await sql`UPDATE applications SET status=${"response_received"},delivery_state=${"recipient_replied"},updated_at=${now} WHERE id=${applicationId} AND owner_email=${user.email}`;
+      await sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${`${user.email}:gmail:${item.id}`},${user.email},${applicationId},${"reply_received"},${"response_received"},${"已收到对方邮件回复，证明申请已进入对方沟通流程"},${item.id},${gmailUrl},${receivedAt}) ON CONFLICT (id) DO NOTHING`;
+    }
     synced++;
   }
   await sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"gmail_sync"},${"inbox"},${`synced_${synced}`},${Date.now()})`;
