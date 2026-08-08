@@ -42,6 +42,12 @@ export function ensureDatabase() {
         status TEXT NOT NULL, verified_at BIGINT, updated_at BIGINT NOT NULL,
         UNIQUE(owner_email, platform_key)
       )`,
+      sql`ALTER TABLE platform_sessions ADD COLUMN IF NOT EXISTS account_label TEXT`,
+      sql`ALTER TABLE platform_sessions ADD COLUMN IF NOT EXISTS auth_method TEXT`,
+      sql`ALTER TABLE platform_sessions ADD COLUMN IF NOT EXISTS site_url TEXT`,
+      sql`ALTER TABLE platform_sessions ADD COLUMN IF NOT EXISTS last_checked_at BIGINT`,
+      sql`ALTER TABLE platform_sessions ADD COLUMN IF NOT EXISTS expires_at BIGINT`,
+      sql`CREATE INDEX IF NOT EXISTS platform_sessions_owner_idx ON platform_sessions(owner_email, updated_at DESC)`,
       sql`CREATE TABLE IF NOT EXISTS channel_connections (
         id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, provider TEXT NOT NULL,
         status TEXT NOT NULL, account_label TEXT, token_ciphertext TEXT,
