@@ -44,6 +44,8 @@ export function ensureDatabase() {
         original TEXT NOT NULL, next_action TEXT NOT NULL, gmail_url TEXT NOT NULL,
         updated_at BIGINT NOT NULL, UNIQUE(owner_email,gmail_message_id)
       )`,
+      sql`ALTER TABLE email_replies ADD COLUMN IF NOT EXISTS application_id TEXT`,
+      sql`CREATE INDEX IF NOT EXISTS email_replies_application_idx ON email_replies(owner_email, application_id)`,
       sql`CREATE INDEX IF NOT EXISTS email_replies_owner_idx ON email_replies(owner_email, received_at DESC)`,
     ]);
   })().catch((error) => {
