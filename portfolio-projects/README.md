@@ -5,7 +5,7 @@ Three production-oriented projects demonstrating end-to-end delivery across AI a
 | Project | What it proves | Live demo |
 |---|---|---|
 | [AI Freelance Workbench](ai-freelance-workbench) | Next.js, TypeScript, opportunity normalization, explainable matching, grounded proposal workflows | [Open demo](https://ai-freelance-workbench.vercel.app) |
-| [Multilingual Support Copilot](multilingual-support-copilot) | Multilingual support UX, intent routing, knowledge citations, human approval and API design | [Open demo](https://multilingual-support-copilot.vercel.app) |
+| [Public Issue Triage](multilingual-support-copilot) | Live GitHub issue ingestion, source health, rule-based intent routing and explicit Gmail/LLM boundaries | [Open demo](https://multilingual-support-copilot.vercel.app) |
 | [Distributed Job Runner](distributed-job-runner) | Go concurrency, bounded queues, idempotency, retries, cancellation, metrics and race-tested code | Source and API documentation |
 
 All public examples use fictional data. No résumé, mailbox, OAuth token, browser session, customer record or production credential is included.
