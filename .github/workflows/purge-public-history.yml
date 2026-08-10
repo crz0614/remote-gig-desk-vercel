@@ -1,0 +1,29 @@
+name: One-time public history sanitization
+
+on:
+  push:
+    branches: [main]
+    paths: [.privacy-history-cleanup-approved]
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Replace main history with the reviewed sanitized tree
+        shell: bash
+        run: |
+          git config user.name "Remote Gig Desk Privacy Cleanup"
+          git config user.email "privacy-cleanup@users.noreply.github.com"
+          git checkout --orphan sanitized-main
+          git reset
+          git add -A
+          git reset .github/workflows/purge-public-history.yml
+          git reset .privacy-history-cleanup-approved
+          git commit -m "Sanitized repository root"
+          git push --force origin HEAD:main
