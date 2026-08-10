@@ -24,6 +24,25 @@ function fillApplication(task){
   return {filledFields,protectedCheckpoint,url:location.href};
 }
 
+function prepareSubmission(){
+  const visible=element=>Boolean(element.offsetWidth||element.offsetHeight||element.getClientRects().length);
+  const required=[...document.querySelectorAll("input[required],textarea[required],select[required]")].filter(visible);
+  const missingRequired=required.filter(input=>input.type!=="checkbox"&&!String(input.value||"").trim()).length;
+  const legalCheckpoint=[...document.querySelectorAll('input[type="checkbox"]')].filter(visible).some(input=>input.required&&!input.checked)||/I (?:agree|certify)|terms and conditions|privacy consent/i.test(document.body.innerText);
+  const buttons=[...document.querySelectorAll('button,input[type="submit"]')].filter(visible);
+  const submit=buttons.find(button=>/submit (?:application)?|send application|apply now|complete application/i.test(String(button.innerText||button.value||"")));
+  if(missingRequired)return {outcome:"missing_required",missingRequired,url:location.href};
+  if(legalCheckpoint)return {outcome:"protected_checkpoint",reason:"final_legal_confirmation",url:location.href};
+  if(!submit)return {outcome:"submit_not_found",url:location.href};
+  submit.click();return {outcome:"submitted_click",url:location.href};
+}
+
+function detectSubmissionEvidence(){
+  const text=document.body.innerText.slice(0,12000);
+  const confirmed=/thank you for applying|application (?:has been |was )?(?:received|submitted)|successfully submitted|we have received your application/i.test(text)||/(?:thank-you|confirmation|application-submitted|application-success)/i.test(location.pathname);
+  return {confirmed,url:location.href,title:document.title};
+}
+
 async function runNextTask(headers,tasks){
   const {activeTaskId}=await chrome.storage.local.get("activeTaskId");
   if(activeTaskId||!tasks.length)return;
@@ -37,7 +56,14 @@ async function runNextTask(headers,tasks){
     await new Promise(resolve=>setTimeout(resolve,5000));
     const injection=await chrome.scripting.executeScript({target:{tabId:tab.id},func:fillApplication,args:[task]});
     const result=injection[0]?.result||{filledFields:0,protectedCheckpoint:false};
-    await report(headers,result.protectedCheckpoint?"verification_required":"form_inspected",task.id,result);
+    if(result.protectedCheckpoint){await report(headers,"verification_required",task.id,result);return;}
+    const prepared=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:prepareSubmission}))[0]?.result;
+    if(prepared?.outcome==="protected_checkpoint"){await report(headers,"verification_required",task.id,prepared);return;}
+    if(prepared?.outcome!=="submitted_click"){await report(headers,"form_inspected",task.id,{...result,...prepared});return;}
+    await new Promise(resolve=>setTimeout(resolve,7000));
+    const evidence=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:detectSubmissionEvidence}))[0]?.result;
+    if(evidence?.confirmed)await report(headers,"task_submitted",task.id,{evidenceUrl:evidence.url,evidenceId:`browser-confirmation:${Date.now()}`});
+    else await report(headers,"form_inspected",task.id,{...result,submissionPending:true,url:evidence?.url||prepared.url});
   }catch(error){
     await report(headers,"task_failed",task.id,{error:String(error)}).catch(()=>{});
   }finally{
