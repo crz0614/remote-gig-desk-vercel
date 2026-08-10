@@ -50,8 +50,13 @@ function skillsFor(text: string) {
 }
 
 function budgetFor(text: string) {
-  const matches = text.match(/(?:\$|USD\s?)\d[\d,]*(?:\s?[-–—]\s?(?:\$|USD\s?)?\d[\d,]*)?(?:\s?\/\s?(?:h|hr|hour))?/i);
-  return matches?.[0] ?? "预算面议";
+  const money = /(?:US\$|\$|USD\s?)\d[\d,]*(?:\.\d+)?(?:\s?[-–—]\s?(?:US\$|\$|USD\s?)?\d[\d,]*(?:\.\d+)?)?(?:\s?(?:\/|per)\s?(?:h|hr|hour|day|week|month|year|annum))?/gi;
+  for (const match of text.matchAll(money)) {
+    const start = match.index ?? 0;
+    const context = text.slice(Math.max(0, start - 55), start + match[0].length + 55);
+    if (/(budget|salary|rate|pay|paid|compensation|bounty|reward|contract|hourly|annual|per\s+(?:hour|day|week|month|year))/i.test(context)) return match[0];
+  }
+  return "预算面议";
 }
 
 function score(text: string, ageHours: number) {
