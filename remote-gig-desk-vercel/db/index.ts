@@ -81,6 +81,13 @@ export function ensureDatabase() {
       sql`ALTER TABLE email_replies ADD COLUMN IF NOT EXISTS application_id TEXT`,
       sql`CREATE INDEX IF NOT EXISTS email_replies_application_idx ON email_replies(owner_email, application_id)`,
       sql`CREATE INDEX IF NOT EXISTS email_replies_owner_idx ON email_replies(owner_email, received_at DESC)`,
+      sql`CREATE TABLE IF NOT EXISTS portfolio_items (
+        id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, title TEXT NOT NULL,
+        summary TEXT NOT NULL, link TEXT NOT NULL, skills JSONB NOT NULL DEFAULT '[]'::jsonb,
+        evidence TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+        created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS portfolio_items_owner_idx ON portfolio_items(owner_email, position ASC, updated_at DESC)`,
     ]);
   })().catch((error) => {
     initialized = null;
