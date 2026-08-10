@@ -2,6 +2,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
 import { unseal } from "../../../lib/secret-store";
 import { getGoogleToken } from "../../../lib/google";
+import { detectFinalApplicationUrl, isReusablePlatformSession, platformKeyForUrl } from "../../../lib/application-url";
 
 function platformKey(source:string){return source.toLowerCase().replace(/[^a-z0-9]+/g,"")||"unknown";}
 
@@ -76,18 +77,28 @@ export async function POST(request:Request){
     return Response.json({id:row.id,status:row.status,deliveryChannel:row.deliveryChannel,createdAt:row.createdAt,duplicate:true});
   }
 
+  const finalApplicationUrl=detectFinalApplicationUrl([body.gig.applicationUrl,body.gig.application,body.gig.fullText,body.gig.summary],body.gig.sourceUrl);
   let status=channel==="github"?"awaiting_github_authorization":channel==="hackernews"?"manual_submission_required":"detecting_destination";
   let deliveryError="";
-  let destination="";
-  const platform=platformKey(body.gig.source||"");
+  let destination=finalApplicationUrl||"";
+  const platform=platformKeyForUrl(finalApplicationUrl,platformKey(body.gig.source||""));
   let deliveryState="queued";
   let receiptId="";
   let receiptUrl="";
   let deliveredAt:number|null=null;
 
+  if(channel!=="github"){
+    const sessions=await sql`SELECT status,expires_at AS "expiresAt" FROM platform_sessions WHERE owner_email=${user.email} AND platform_key=${platform} LIMIT 1`;
+    const session=sessions[0] as any;
+    if(isReusablePlatformSession(session,now)){
+      status="manual_submission_required";
+      deliveryState="platform_session_verified";
+    }
+  }
+
   if(channel==="github"){
     const target=githubIssue(body.gig.sourceUrl);
-    destination=target?body.gig.sourceUrl:"";
+    destination=target?body.gig.sourceUrl:destination;
     const connections=await sql`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=${user.email} AND provider=${"github"} AND status=${"connected"} LIMIT 1`;
     const tokenCiphertext=(connections[0] as any)?.tokenCiphertext as string|undefined;
     if(target&&tokenCiphertext){
@@ -127,5 +138,5 @@ export async function POST(request:Request){
     sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${id},${"delivery_attempt"},${status},${deliveryState==="platform_accepted"?"平台接口已确认接收申请":deliveryError?"投递失败："+deliveryError:"任务已建立，等待下一步"},${receiptId},${receiptUrl},${now})`,
     sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_processed"},${id},${deliveryError||status},${now})`,
   ]);
-  return Response.json({id,status,deliveryChannel:channel,createdAt:now,error:deliveryError||undefined},{status:201});
+  return Response.json({id,status,deliveryChannel:channel,destination:destination||undefined,platformKey:platform,deliveryState,createdAt:now,error:deliveryError||undefined},{status:201});
 }
