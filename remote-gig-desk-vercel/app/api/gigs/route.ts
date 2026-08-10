@@ -1,3 +1,5 @@
+import { getActiveAts, getCompanyCareers, getWellfound, getYC } from "@/lib/expanded-opportunity-sources";
+
 type LiveGig = {
   id: string;
   title: string;
@@ -180,9 +182,9 @@ async function getRemotive():Promise<LiveGig[]>{
 }
 
 export async function GET() {
-  const jobs = await Promise.allSettled([getGitHub(),getHackerNews(),getJobicy(),getRemotive(),getRemoteOK(),getArbeitnow(),getReddit("forhire"),getReddit("jobbit")]);
-  const names = ["GitHub","Hacker News","Jobicy","Remotive","Remote OK","Arbeitnow","Reddit r/forhire","Reddit r/jobbit"];
-  const sources = jobs.map((result, index) => ({ name: names[index], ok: result.status === "fulfilled" }));
+  const jobs = await Promise.allSettled([getGitHub(),getHackerNews(),getJobicy(),getRemotive(),getRemoteOK(),getArbeitnow(),getReddit("forhire"),getReddit("jobbit"),getYC(),getWellfound(),getCompanyCareers(),getActiveAts()]);
+  const names = ["GitHub","Hacker News","Jobicy","Remotive","Remote OK","Arbeitnow","Reddit r/forhire","Reddit r/jobbit","Y Combinator","Wellfound","公司 Careers","公司 ATS"];
+  const sources = jobs.map((result, index) => ({ name: names[index], ok: result.status === "fulfilled", count: result.status === "fulfilled" ? result.value.length : 0 }));
   const gigs = jobs.flatMap(result => result.status === "fulfilled" ? result.value : []);
   const unique = [...new Map(gigs.map(gig => [gig.sourceUrl, gig])).values()]
     .sort((a, b) => b.match - a.match || +new Date(b.publishedAt) - +new Date(a.publishedAt));
