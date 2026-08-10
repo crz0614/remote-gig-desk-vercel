@@ -3,5 +3,5 @@ export type WorkbenchUser = { displayName: string; email: string; fullName: stri
 export async function getChatGPTUser(): Promise<WorkbenchUser | null> {
   const email = process.env.OWNER_EMAIL;
   if (!email) return null;
-  return { displayName: "Vesper Chen", email, fullName: "Vesper Chen" };
+  return { displayName: "Remote Gig Desk User", email, fullName: "Remote Gig Desk User" };
 }
