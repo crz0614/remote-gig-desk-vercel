@@ -1,5 +1,7 @@
 # Distributed Job Runner
 
+[![Portfolio CI](https://github.com/crz0614/remote-gig-desk-vercel/actions/workflows/portfolio-ci.yml/badge.svg)](https://github.com/crz0614/remote-gig-desk-vercel/actions/workflows/portfolio-ci.yml)
+
 A dependency-free Go service for bounded concurrent execution. It demonstrates worker pools, backpressure, idempotent submission, per-attempt deadlines, exponential retry delay, cancellation, graceful shutdown and operational metrics.
 
 ## Run
