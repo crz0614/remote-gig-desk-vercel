@@ -22,3 +22,12 @@ test("only a receipt becomes platform accepted evidence",()=>{
 test("links a reply to the strongest matching application title",()=>{
   assert.equal(reply.matchApplicationByTitle("Senior Rust Engineer interview","",[{id:"a",title:"Frontend Engineer"},{id:"b",title:"Senior Rust Engineer"}]),"b");
 });
+
+test("recognizes requests for portfolio and contact details",()=>{
+  assert.equal(reply.classifyReply("Next step","Please share a relevant portfolio or code sample").kind,"portfolio");
+  assert.equal(reply.classifyReply("Contact","What is the best phone number to reach you?").kind,"contact");
+});
+
+test("uses the verified destination domain as reply-linking evidence",()=>{
+  assert.equal(reply.matchApplicationByTitle("Application update","",[{id:"a",title:"Platform Engineer",destination:"jobs@example.com"}],"Hiring <jobs@example.com>"),"a");
+});

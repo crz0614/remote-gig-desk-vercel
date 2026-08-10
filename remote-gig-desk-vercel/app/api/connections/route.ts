@@ -3,6 +3,8 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
 import { browserExecutionContract } from "../../../lib/ats-adapter";
 import { browserTaskState } from "../../../lib/browser-task-state";
+import { applicantProfileForForms } from "../../../lib/applicant-profile";
+import { unseal } from "../../../lib/secret-store";
 
 const channels=[
   {id:"github",name:"GitHub Issues / Bounties",mode:"direct",capability:"授权后可通过官方 API 发布申请评论",status:"authorization_required"},
@@ -20,10 +22,12 @@ export async function GET(){
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();
   const sql=db();
-  const [rows,sessions]=await Promise.all([
+  const [rows,sessions,queues]=await Promise.all([
     sql`SELECT provider,status,account_label AS "accountLabel",scopes,updated_at AS "updatedAt" FROM channel_connections WHERE owner_email=${user.email}`,
-    sql`SELECT platform_key AS "platformKey",status,account_label AS "accountLabel",auth_method AS "authMethod",site_url AS "siteUrl",verified_at AS "verifiedAt",last_checked_at AS "lastCheckedAt",expires_at AS "expiresAt",updated_at AS "updatedAt" FROM platform_sessions WHERE owner_email=${user.email} ORDER BY updated_at DESC`
+    sql`SELECT platform_key AS "platformKey",status,account_label AS "accountLabel",auth_method AS "authMethod",site_url AS "siteUrl",verified_at AS "verifiedAt",last_checked_at AS "lastCheckedAt",expires_at AS "expiresAt",updated_at AS "updatedAt" FROM platform_sessions WHERE owner_email=${user.email} ORDER BY updated_at DESC`,
+    sql`SELECT platform_key AS "platformKey",count(*)::int AS "queuedCount",count(*) FILTER (WHERE status=${"verification_required"})::int AS "verificationCount" FROM applications WHERE owner_email=${user.email} AND status IN (${"queued_for_browser"},${"browser_in_progress"},${"verification_required"},${"form_ready"}) GROUP BY platform_key`
   ]);
+  const queueByPlatform=new Map((queues as any[]).map(queue=>[queue.platformKey,queue]));
   const saved=new Map(rows.map((x:any)=>[x.provider,x]));
   const resolvedChannels=channels.map(channel=>({...channel,...(saved.get(channel.id)??{})}));
   const names=new Map(channels.map(channel=>[channel.id,channel.name]));
@@ -37,9 +41,12 @@ export async function GET(){
   }
   for(const session of sessions as any[]){
     const expired=Boolean(session.expiresAt&&Number(session.expiresAt)<=Date.now());
+    const queue=queueByPlatform.get(session.platformKey)||{queuedCount:0,verificationCount:0};
     const item={
       ...session,name:names.get(session.platformKey)||session.platformKey,
       status:expired?"expired":session.status,sessionType:session.authMethod||"browser_session",
+      actualDomain:(()=>{try{return new URL(session.siteUrl).hostname}catch{return ""}})(),
+      queuedCount:queue.queuedCount,verificationCount:queue.verificationCount,
       note:expired?"登录会话已到复查时间；下次投递前需要重新验证。":"浏览器登录会被同平台任务复用；网站退出、撤销或 Cookie 过期后需重新登录一次。"
     };
     const existing=authenticated.get(session.platformKey);
@@ -68,9 +75,10 @@ export async function POST(request:Request){
     await sql`UPDATE browser_agents SET status=${"online"},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
     if(["task_started","form_inspected","verification_required","task_submitted","task_failed"].includes(String(body.action))){
       const taskId=String(body.taskId||"");
-      const applications=await sql`SELECT id,status,platform_key AS "platformKey" FROM applications WHERE id=${taskId} AND owner_email=${agent.ownerEmail} LIMIT 1`;
+      const applications=await sql`SELECT id,status,platform_key AS "platformKey",lease_owner AS "leaseOwner" FROM applications WHERE id=${taskId} AND owner_email=${agent.ownerEmail} LIMIT 1`;
       const application=applications[0] as any;
       if(!application)return Response.json({error:"task_not_found"},{status:404,headers:agentCors});
+      if(application.leaseOwner&&application.leaseOwner!==agent.id)return Response.json({error:"task_lease_mismatch"},{status:409,headers:agentCors});
       const action=String(body.action);
       const evidenceUrl=String(body.evidenceUrl||"");
       const evidenceId=String(body.evidenceId||"");
@@ -81,7 +89,8 @@ export async function POST(request:Request){
       if(action==="verification_required"){
         await sql`INSERT INTO platform_sessions(id,owner_email,platform_key,status,updated_at) VALUES(${randomUUID()},${agent.ownerEmail},${application.platformKey},${"verification_required"},${now}) ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verification_required"},updated_at=${now}`;
       }
-      await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},last_error=${error},receipt_id=${evidenceId},receipt_url=${evidenceUrl},delivered_at=${deliveredAt},updated_at=${now} WHERE id=${taskId} AND owner_email=${agent.ownerEmail}`;
+      const terminal=["form_inspected","verification_required","task_submitted","task_failed"].includes(action);
+      await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},last_error=${error},receipt_id=${evidenceId},receipt_url=${evidenceUrl},delivered_at=${deliveredAt},lease_owner=${terminal?null:agent.id},lease_expires_at=${terminal?null:now+120000},evidence=${JSON.stringify({url:evidenceUrl||null,id:evidenceId||null,reportedBy:agent.id,reportedAt:now})}::jsonb,updated_at=${now} WHERE id=${taskId} AND owner_email=${agent.ownerEmail}`;
       await sql`INSERT INTO application_events(id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES(${randomUUID()},${agent.ownerEmail},${taskId},${action.toUpperCase()},${status},${message},${evidenceId},${evidenceUrl},${now})`;
       return Response.json({ok:true,taskId,status,deliveryState},{headers:agentCors});
     }
@@ -93,8 +102,16 @@ export async function POST(request:Request){
         ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verified"},verified_at=${now},updated_at=${now},account_label=${String(body.accountLabel||"")},auth_method=${"browser_extension"},site_url=${String(body.siteUrl||"")},last_checked_at=${now}`;
       await sql`UPDATE applications SET status=${"queued_for_browser"},delivery_state=${"session_reused"},last_error=${""},updated_at=${now} WHERE owner_email=${agent.ownerEmail} AND platform_key=${platformKey} AND status=${"verification_required"}`;
     }
-    const taskRows=await sql`SELECT id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate" FROM applications WHERE owner_email=${agent.ownerEmail} AND status=${"queued_for_browser"} ORDER BY created_at ASC LIMIT 20`;
-    const tasks=(taskRows as any[]).map(task=>({...task,execution:browserExecutionContract(task.applicationUrl||task.destination)}));
+    const leaseUntil=now+120000;
+    const taskRows=await sql`UPDATE applications SET lease_owner=${agent.id},lease_expires_at=${leaseUntil},attempt_count=attempt_count+1,updated_at=${now} WHERE id=(SELECT id FROM applications WHERE owner_email=${agent.ownerEmail} AND status=${"queued_for_browser"} AND (lease_owner IS NULL OR lease_expires_at<${now}) ORDER BY created_at ASC LIMIT 1) RETURNING id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate",attempt_count AS "attemptCount"`;
+    const [profiles,portfolio]=await Promise.all([
+      sql`SELECT profile_ciphertext AS "profileCiphertext" FROM private_profiles WHERE owner_email=${agent.ownerEmail} LIMIT 1`,
+      sql`SELECT link FROM portfolio_items WHERE owner_email=${agent.ownerEmail} AND link<>${""} ORDER BY position ASC,updated_at DESC LIMIT 10`
+    ]);
+    let privateProfile:unknown={};
+    try{if((profiles[0] as any)?.profileCiphertext)privateProfile=JSON.parse(await unseal(String((profiles[0] as any).profileCiphertext)));}catch{}
+    const applicantProfile=applicantProfileForForms(privateProfile,(portfolio as any[]).map(item=>String(item.link)));
+    const tasks=(taskRows as any[]).map(task=>({...task,applicantProfile,execution:browserExecutionContract(task.applicationUrl||task.destination)}));
     return Response.json({ok:true,agentId:agent.id,heartbeatAt:now,tasks},{headers:agentCors});
   }
   const user=await getChatGPTUser();

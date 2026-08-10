@@ -34,7 +34,7 @@ export async function POST() {
   if (!listResponse.ok) return Response.json({ error: `gmail_list_${listResponse.status}` }, { status: 502 });
   const list = await listResponse.json() as { messages?: { id: string; threadId: string }[] };
   const sql = db();
-  const applications = await sql`SELECT id,title FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 200` as { id: string; title: string }[];
+  const applications = await sql`SELECT id,title,source,destination,application_url AS "applicationUrl" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 200` as { id: string; title: string; source?:string; destination?:string; applicationUrl?:string }[];
   let synced = 0;
   for (const item of list.messages || []) {
     const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${item.id}?format=full`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
@@ -49,7 +49,7 @@ export async function POST() {
     const company = sender.replace(/<[^>]+>/g, "").replace(/"/g, "").trim() || sender;
     const receivedAt = Number(message.internalDate) || Date.now();
     const now = Date.now();
-    const applicationId = matchApplicationByTitle(subject, original, applications);
+    const applicationId = matchApplicationByTitle(subject, original, applications, sender);
     const chineseSummary=`${result.summary}\n\n建议操作：${result.next}`;
     await sql`INSERT INTO email_replies (id,owner_email,gmail_message_id,thread_id,company,subject,sender,received_at,status,tone,summary,translation,original,next_action,gmail_url,updated_at,application_id) VALUES (${crypto.randomUUID()},${user.email},${item.id},${item.threadId},${company},${subject},${sender},${receivedAt},${result.status},${result.tone},${result.summary},${chineseSummary},${original},${result.next},${`https://mail.google.com/mail/u/0/#all/${item.id}`},${now},${applicationId}) ON CONFLICT (owner_email,gmail_message_id) DO UPDATE SET company=EXCLUDED.company,subject=EXCLUDED.subject,sender=EXCLUDED.sender,received_at=EXCLUDED.received_at,status=EXCLUDED.status,tone=EXCLUDED.tone,summary=EXCLUDED.summary,translation=EXCLUDED.translation,original=EXCLUDED.original,next_action=EXCLUDED.next_action,gmail_url=EXCLUDED.gmail_url,updated_at=EXCLUDED.updated_at,application_id=EXCLUDED.application_id`;
     if(applicationId){

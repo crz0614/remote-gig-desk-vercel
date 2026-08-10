@@ -5,7 +5,7 @@ import { normalizePortfolioItem } from "../../../lib/portfolio";
 export async function GET(){
   const user=await getChatGPTUser();if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();const sql=db();
-  const items=await sql`SELECT id,title,summary,link,skills,evidence,position,created_at AS "createdAt",updated_at AS "updatedAt" FROM portfolio_items WHERE owner_email=${user.email} ORDER BY position ASC,updated_at DESC`;
+  const items=await sql`SELECT id,title,summary,link,skills,evidence,position,archive_name AS "archiveName",parsed_files AS "parsedFiles",github_repo AS "githubRepo",deployment_url AS "deploymentUrl",status,created_at AS "createdAt",updated_at AS "updatedAt" FROM portfolio_items WHERE owner_email=${user.email} ORDER BY position ASC,updated_at DESC`;
   return Response.json({items});
 }
 

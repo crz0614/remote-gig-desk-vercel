@@ -30,9 +30,14 @@ export function ensureDatabase() {
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivered_at BIGINT`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS application_url TEXT`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS materials JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS lease_owner TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS lease_expires_at BIGINT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS evidence JSONB NOT NULL DEFAULT '{}'::jsonb`,
       sql`UPDATE applications SET platform_key=lower(regexp_replace(source, ${"[^a-zA-Z0-9]+"}, ${""}, ${"g"})) WHERE platform_key IS NULL OR platform_key=${""}`,
       sql`CREATE INDEX IF NOT EXISTS applications_owner_idx ON applications(owner_email, updated_at DESC)`,
       sql`CREATE INDEX IF NOT EXISTS applications_platform_idx ON applications(owner_email, platform_key, updated_at DESC)`,
+      sql`CREATE INDEX IF NOT EXISTS applications_lease_idx ON applications(owner_email,status,lease_expires_at,created_at ASC)`,
       sql`CREATE TABLE IF NOT EXISTS application_events (
         id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, application_id TEXT NOT NULL,
         event_type TEXT NOT NULL, status TEXT NOT NULL, message TEXT NOT NULL,
@@ -88,6 +93,11 @@ export function ensureDatabase() {
         created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
       )`,
       sql`CREATE INDEX IF NOT EXISTS portfolio_items_owner_idx ON portfolio_items(owner_email, position ASC, updated_at DESC)`,
+      sql`ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS archive_name TEXT`,
+      sql`ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS parsed_files JSONB NOT NULL DEFAULT '[]'::jsonb`,
+      sql`ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS github_repo TEXT`,
+      sql`ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS deployment_url TEXT`,
+      sql`ALTER TABLE portfolio_items ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'saved'`,
       sql`CREATE TABLE IF NOT EXISTS private_profiles (
         owner_email TEXT PRIMARY KEY, profile_ciphertext TEXT NOT NULL, updated_at BIGINT NOT NULL
       )`,

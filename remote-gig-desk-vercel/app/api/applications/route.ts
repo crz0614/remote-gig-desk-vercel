@@ -55,9 +55,12 @@ export async function GET(){
   const sql=db();
   const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",application_url AS "applicationUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",platform_key AS "platformKey",delivery_state AS "deliveryState",receipt_id AS "receiptId",receipt_url AS "receiptUrl",delivered_at AS "deliveredAt",materials,created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
   const events=await sql`SELECT id,application_id AS "applicationId",event_type AS "eventType",status,message,evidence_id AS "evidenceId",evidence_url AS "evidenceUrl",created_at AS "createdAt" FROM application_events WHERE owner_email=${user.email} ORDER BY created_at ASC`;
+  const replies=await sql`SELECT id,application_id AS "applicationId",subject,status,tone,summary,translation,next_action AS "next",gmail_url AS "gmailUrl",received_at AS "receivedAt" FROM email_replies WHERE owner_email=${user.email} AND application_id IS NOT NULL ORDER BY received_at DESC`;
   const byApplication=new Map<string,any[]>();
   for(const event of events as any[]){const list=byApplication.get(event.applicationId)||[];list.push(event);byApplication.set(event.applicationId,list);}
-  return Response.json({applications:(rows as any[]).map(row=>({...row,events:byApplication.get(row.id)||[]}))});
+  const repliesByApplication=new Map<string,any[]>();
+  for(const reply of replies as any[]){const list=repliesByApplication.get(reply.applicationId)||[];list.push(reply);repliesByApplication.set(reply.applicationId,list);}
+  return Response.json({applications:(rows as any[]).map(row=>({...row,events:byApplication.get(row.id)||[],replies:repliesByApplication.get(row.id)||[]}))});
 }
 
 export async function POST(request:Request){
@@ -94,6 +97,8 @@ export async function POST(request:Request){
     resumeHighlights:Array.isArray(body.resume)?body.resume.map(String).slice(0,20):[],
     coverLetter:String(body.coverLetter||""),
     workMode:String(body.workMode||""),
+    portfolioUrls:Array.isArray(body.portfolioUrls)?body.portfolioUrls.map(String).filter((value:string)=>/^https?:\/\//.test(value)).slice(0,10):[],
+    attachments:Array.isArray(body.attachments)?body.attachments.map(String).slice(0,20):[],
     generatedAt:now,
   });
 

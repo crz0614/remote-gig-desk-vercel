@@ -12,11 +12,16 @@ function fillApplication(task){
   const inputs=[...document.querySelectorAll("input,textarea")].filter(visible);
   const protectedCheckpoint=Boolean(document.querySelector('iframe[src*="captcha" i], [class*="captcha" i], input[autocomplete="one-time-code"], input[type="password"]'));
   let filledFields=0;
+  const profile=task.applicantProfile||{};
+  const values=[
+    [/first.?name|given.?name/i,profile.firstName],[/last.?name|family.?name|surname/i,profile.lastName],
+    [/(^|\b)full.?name|candidate.?name/i,profile.fullName],[/e-?mail/i,profile.email],[/phone|mobile/i,profile.phone],
+    [/location|city|address/i,profile.location],[/linkedin/i,profile.linkedin],[/github/i,profile.github],[/portfolio|website/i,profile.portfolio],
+    [/cover|letter|message|additional|why|note/i,task.applicationLetter],[/rate|salary|compensation|budget/i,task.proposedRate],
+  ];
   for(const input of inputs){
     const hint=[input.name,input.id,input.getAttribute("aria-label"),input.placeholder].filter(Boolean).join(" ");
-    let value="";
-    if(/cover|letter|message|additional|why|note/i.test(hint))value=task.applicationLetter||"";
-    if(/rate|salary|compensation|budget/i.test(hint))value=task.proposedRate||"";
+    const value=values.find(([pattern,candidate])=>candidate&&pattern.test(hint))?.[1]||"";
     if(!value||input.value)continue;
     const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),"value")?.set;
     setter?.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));filledFields++;
