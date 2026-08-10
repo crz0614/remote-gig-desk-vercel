@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from "crypto";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
 import { browserExecutionContract } from "../../../lib/ats-adapter";
+import { browserTaskState } from "../../../lib/browser-task-state";
 
 const channels=[
   {id:"github",name:"GitHub Issues / Bounties",mode:"direct",capability:"授权后可通过官方 API 发布申请评论",status:"authorization_required"},
@@ -65,6 +66,25 @@ export async function POST(request:Request){
     if(!agent)return Response.json({error:"invalid_agent_token"},{status:401,headers:agentCors});
     const now=Date.now();
     await sql`UPDATE browser_agents SET status=${"online"},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
+    if(["task_started","form_inspected","verification_required","task_submitted","task_failed"].includes(String(body.action))){
+      const taskId=String(body.taskId||"");
+      const applications=await sql`SELECT id,status,platform_key AS "platformKey" FROM applications WHERE id=${taskId} AND owner_email=${agent.ownerEmail} LIMIT 1`;
+      const application=applications[0] as any;
+      if(!application)return Response.json({error:"task_not_found"},{status:404,headers:agentCors});
+      const action=String(body.action);
+      const evidenceUrl=String(body.evidenceUrl||"");
+      const evidenceId=String(body.evidenceId||"");
+      let next;
+      try{next=browserTaskState(action,body);}catch(cause){return Response.json({error:cause instanceof Error?cause.message:"invalid_task_state"},{status:400,headers:agentCors});}
+      const {status,deliveryState,message,error}=next;
+      const deliveredAt:null|number=next.delivered?now:null;
+      if(action==="verification_required"){
+        await sql`INSERT INTO platform_sessions(id,owner_email,platform_key,status,updated_at) VALUES(${randomUUID()},${agent.ownerEmail},${application.platformKey},${"verification_required"},${now}) ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verification_required"},updated_at=${now}`;
+      }
+      await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},last_error=${error},receipt_id=${evidenceId},receipt_url=${evidenceUrl},delivered_at=${deliveredAt},updated_at=${now} WHERE id=${taskId} AND owner_email=${agent.ownerEmail}`;
+      await sql`INSERT INTO application_events(id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES(${randomUUID()},${agent.ownerEmail},${taskId},${action.toUpperCase()},${status},${message},${evidenceId},${evidenceUrl},${now})`;
+      return Response.json({ok:true,taskId,status,deliveryState},{headers:agentCors});
+    }
     if(body.action==="record_session"){
       const platformKey=String(body.platformKey||"").toLowerCase().replace(/[^a-z0-9_-]/g,"");
       if(!platformKey)return Response.json({error:"platform_required"},{status:400});
