@@ -15,7 +15,7 @@ type ApplicationEvent = { id:string; eventType:string; status:string; message:st
 type ApplicationReply = { id:string; subject:string; status:string; tone:string; summary:string; translation:string; next:string; gmailUrl:string; receivedAt:string };
 type ApplicationRecord = { id:string; gigId:string; title:string; source:string; sourceUrl:string; applicationUrl?:string; status:string; deliveryChannel:string; proposedRate:string; createdAt:string; updatedAt:string; destination?:string; lastError?:string; platformKey?:string; deliveryState?:string; receiptId?:string; receiptUrl?:string; deliveredAt?:string; materials?:{language?:string;matchedSkills?:string[];resumeHighlights?:string[];coverLetter?:string;workMode?:string;portfolioUrls?:string[];attachments?:string[]}; events?:ApplicationEvent[]; replies?:ApplicationReply[] };
 
-const profileSkills=["React / TypeScript","可访问和响应式 Web","Go 后端 / 高并发","API / RPC 集成","异常处理与数据结构","Rust 工程","Python 开发 / 自动化 / 数据处理"];
+const profileSkills=["C/C++","Rust","Go","Java","C#","Python","JavaScript","React / TypeScript","并发与无锁编程","操作系统与内存","TCP/IP 与 Socket","BGP/OSPF","VXLAN/EVPN","SDN","Kubernetes","Docker","Redis/Kafka","Unity/Unreal","HLSL/GLSL/Metal","API / RPC 集成","性能调优与排障"];
 const unpublishedBudgetPolicy="甲方未公开预算时，报价待与甲方确认，AI 不得编造金额";
 
 const Icon = ({ name }: { name: string }) => {
@@ -54,6 +54,7 @@ export default function Home(){
     window.addEventListener('focus',refreshMail);
     return()=>{document.removeEventListener('visibilitychange',refreshMail);window.removeEventListener('focus',refreshMail);};
   },[]);
+  useEffect(()=>{const fragment=new URLSearchParams(location.hash.slice(1));const encoded=fragment.get('profileImport');if(!encoded)return;history.replaceState(null,'',location.pathname+location.search);void(async()=>{try{const decoded=decodeURIComponent(escape(atob(encoded.replace(/-/g,'+').replace(/_/g,'/'))));const recovered=JSON.parse(decoded);const currentResponse=await fetch('/api/profile',{cache:'no-store'});const current=currentResponse.ok?(await currentResponse.json()).profile||{}:{};const saveResponse=await fetch('/api/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...current,...recovered})});if(!saveResponse.ok)throw new Error();setMailNotice('已将确认属实的旧工作台能力与三段项目经历恢复到加密个人资料库。');}catch{setMailNotice('旧工作台资料恢复失败，未修改现有个人资料。');}})();},[]);
   const toggleSave=(id:string)=>setSaved(v=>{const n=v.includes(id)?v.filter(x=>x!==id):[...v,id];localStorage.setItem('gig-saved',JSON.stringify(n));return n;});
   const markApplied=(id:string)=>setApplied(v=>{const n=v.includes(id)?v:[...v,id];localStorage.setItem('gig-applied',JSON.stringify(n));return n;});
   const toggleChecked=(id:string)=>setChecked(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);

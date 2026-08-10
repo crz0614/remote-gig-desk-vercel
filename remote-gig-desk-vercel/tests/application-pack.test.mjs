@@ -15,6 +15,14 @@ test("prompt forbids copying, invention and internal placeholders", () => {
   assert.match(prompt, /select a project later/i);
 });
 
+test("keeps the confirmed systems capability library available for matching", async () => {
+  const module = await import("../lib/application-pack.ts");
+  assert.ok(module.requirementCapabilities.includes("C / C++"));
+  assert.ok(module.requirementCapabilities.includes("Rust"));
+  assert.ok(module.requirementCapabilities.includes("Go"));
+  assert.ok(module.requirementCapabilities.some(value => value.includes("BGP/OSPF")));
+});
+
 test("rejects old placeholder letters", () => {
   assert.throws(() => validateApplicationPack({ language: "en", quote: "Negotiable", matchedSkills: ["React"], resume: ["Built UI"], workMode: "Remote", coverLetter: "A verified project example will be selected from the private profile before submission. This is placeholder text." }));
 });

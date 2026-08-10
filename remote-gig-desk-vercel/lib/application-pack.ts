@@ -14,6 +14,17 @@ export type ApplicantProfile = {
 };
 
 export const requirementCapabilities = [
+  "C / C++",
+  "Rust",
+  "Go",
+  "Java and C#",
+  "Python and JavaScript",
+  "concurrency and lock-free programming",
+  "operating systems and memory",
+  "TCP/IP, Socket, BGP/OSPF, VXLAN/EVPN and SDN",
+  "Kubernetes, Docker, Redis and Kafka",
+  "Unity, Unreal, HLSL, GLSL and Metal",
+  "performance optimisation and troubleshooting",
   "React / TypeScript",
   "accessible and responsive web development",
   "Go backends and high-concurrency systems",
