@@ -53,7 +53,7 @@ export async function GET(){
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();
   const sql=db();
-  const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",application_url AS "applicationUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",platform_key AS "platformKey",delivery_state AS "deliveryState",receipt_id AS "receiptId",receipt_url AS "receiptUrl",delivered_at AS "deliveredAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
+  const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",application_url AS "applicationUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",platform_key AS "platformKey",delivery_state AS "deliveryState",receipt_id AS "receiptId",receipt_url AS "receiptUrl",delivered_at AS "deliveredAt",materials,created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
   const events=await sql`SELECT id,application_id AS "applicationId",event_type AS "eventType",status,message,evidence_id AS "evidenceId",evidence_url AS "evidenceUrl",created_at AS "createdAt" FROM application_events WHERE owner_email=${user.email} ORDER BY created_at ASC`;
   const byApplication=new Map<string,any[]>();
   for(const event of events as any[]){const list=byApplication.get(event.applicationId)||[];list.push(event);byApplication.set(event.applicationId,list);}
@@ -86,6 +86,16 @@ export async function POST(request:Request){
   let receiptId="";
   let receiptUrl="";
   let deliveredAt:number|null=null;
+  const materials=JSON.stringify({
+    version:1,
+    language:String(body.language||""),
+    proposedRate:String(body.quote||""),
+    matchedSkills:Array.isArray(body.matchedSkills)?body.matchedSkills.map(String).slice(0,20):[],
+    resumeHighlights:Array.isArray(body.resume)?body.resume.map(String).slice(0,20):[],
+    coverLetter:String(body.coverLetter||""),
+    workMode:String(body.workMode||""),
+    generatedAt:now,
+  });
 
   if(channel!=="github"){
     const sessions=await sql`SELECT status,expires_at AS "expiresAt" FROM platform_sessions WHERE owner_email=${user.email} AND platform_key=${platform} LIMIT 1`;
@@ -133,7 +143,7 @@ export async function POST(request:Request){
   }
 
   await sql.transaction([
-    sql`INSERT INTO applications (id,owner_email,gig_id,source,source_url,application_url,title,language,proposed_rate,application_letter,status,delivery_channel,destination,last_error,platform_key,delivery_state,receipt_id,receipt_url,delivered_at,created_at,updated_at) VALUES (${id},${user.email},${body.gig.id},${body.gig.source},${body.gig.sourceUrl},${finalApplicationUrl},${body.gig.title},${body.language},${body.quote},${body.coverLetter},${status},${channel},${destination},${deliveryError},${platform},${deliveryState},${receiptId},${receiptUrl},${deliveredAt},${now},${now})`,
+    sql`INSERT INTO applications (id,owner_email,gig_id,source,source_url,application_url,title,language,proposed_rate,application_letter,status,delivery_channel,destination,last_error,platform_key,delivery_state,receipt_id,receipt_url,delivered_at,materials,created_at,updated_at) VALUES (${id},${user.email},${body.gig.id},${body.gig.source},${body.gig.sourceUrl},${finalApplicationUrl},${body.gig.title},${body.language},${body.quote},${body.coverLetter},${status},${channel},${destination},${deliveryError},${platform},${deliveryState},${receiptId},${receiptUrl},${deliveredAt},${materials}::jsonb,${now},${now})`,
     sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${id},${deliveryState==="session_reused"?"SESSION_REUSED":deliveryState==="verification_required"?"VERIFICATION_REQUIRED":"QUEUED"},${status},${deliveryState==="platform_accepted"?"平台接口已确认接收申请":deliveryState==="session_reused"?"已复用平台会话，任务进入浏览器执行队列":deliveryState==="verification_required"?"平台队列等待一次登录或验证":deliveryError?"投递失败："+deliveryError:"任务已建立，等待下一步"},${receiptId},${receiptUrl},${now})`,
     sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_processed"},${id},${deliveryError||status},${now})`,
   ]);

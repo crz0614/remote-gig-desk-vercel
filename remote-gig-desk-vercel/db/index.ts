@@ -29,6 +29,7 @@ export function ensureDatabase() {
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS receipt_url TEXT`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS delivered_at BIGINT`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS application_url TEXT`,
+      sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS materials JSONB NOT NULL DEFAULT '{}'::jsonb`,
       sql`UPDATE applications SET platform_key=lower(regexp_replace(source, ${"[^a-zA-Z0-9]+"}, ${""}, ${"g"})) WHERE platform_key IS NULL OR platform_key=${""}`,
       sql`CREATE INDEX IF NOT EXISTS applications_owner_idx ON applications(owner_email, updated_at DESC)`,
       sql`CREATE INDEX IF NOT EXISTS applications_platform_idx ON applications(owner_email, platform_key, updated_at DESC)`,
