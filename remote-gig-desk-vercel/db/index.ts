@@ -88,6 +88,9 @@ export function ensureDatabase() {
         created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
       )`,
       sql`CREATE INDEX IF NOT EXISTS portfolio_items_owner_idx ON portfolio_items(owner_email, position ASC, updated_at DESC)`,
+      sql`CREATE TABLE IF NOT EXISTS private_profiles (
+        owner_email TEXT PRIMARY KEY, profile_ciphertext TEXT NOT NULL, updated_at BIGINT NOT NULL
+      )`,
     ]);
   })().catch((error) => {
     initialized = null;
