@@ -1,0 +1,40 @@
+name: Portfolio CI
+on:
+  push:
+    paths: ["portfolio-projects/**", ".github/workflows/portfolio-ci.yml"]
+  pull_request:
+    paths: ["portfolio-projects/**", ".github/workflows/portfolio-ci.yml"]
+permissions: { contents: read }
+jobs:
+  web-projects:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [ai-freelance-workbench, multilingual-support-copilot]
+    defaults:
+      run:
+        working-directory: portfolio-projects/${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portfolio-projects/${{ matrix.project }}/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
+  go-runner:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: portfolio-projects/distributed-job-runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.23" }
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race -cover ./...
+      - run: go build ./cmd/server
