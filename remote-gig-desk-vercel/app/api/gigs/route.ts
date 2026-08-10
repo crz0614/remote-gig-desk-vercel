@@ -14,7 +14,7 @@ type LiveGig = {
   competition: "低" | "中";
 };
 
-const skillWords = ["Python", "C++", "Java", "LLM", "AI", "React", "API", "Automation", "Web", "Backend"];
+const skillWords = ["Python", "C++", "Rust", "Go", "Java", "C#", "TypeScript", "LLM", "AI", "React", "Node.js", "API", "Automation", "Backend", "Kubernetes", "Docker", "AWS", "PostgreSQL", "Security", "Data Engineering"];
 
 function clean(value = "") {
   return value
@@ -41,10 +41,10 @@ function isAggregatorIssue(item: any) {
 function skillsFor(text: string) {
   const lower = text.toLowerCase();
   const aliases: Record<string, string[]> = {
-    Python: ["python", "django", "fastapi"], "C++": ["c++", "cpp"], Java: ["java", "spring"],
+    Python: ["python", "django", "fastapi"], "C++": ["c++", "cpp"], Rust: ["rust", "cargo"], Go: ["golang", " go "], Java: ["java", "spring"], "C#": ["c#", ".net"], TypeScript: ["typescript", " ts "],
     LLM: ["llm", "large language", "rag", "openai"], AI: [" ai ", "machine learning", "ml "],
-    React: ["react", "next.js", "nextjs"], API: [" api", "integration"], Automation: ["automat", "script"],
-    Web: ["website", " web ", "frontend"], Backend: ["backend", "server"],
+    React: ["react", "next.js", "nextjs"], "Node.js": ["node.js", "nodejs"], API: [" api", "integration"], Automation: ["automat", "script"],
+    Backend: ["backend", "server"], Kubernetes: ["kubernetes", " k8s"], Docker: ["docker", "container"], AWS: [" aws ", "lambda", "ec2"], PostgreSQL: ["postgres", "postgresql"], Security: ["security", "secure", "vulnerability"], "Data Engineering": ["data engineer", "etl", "pipeline"],
   };
   return skillWords.filter(skill => aliases[skill].some(word => ` ${lower} `.includes(word))).slice(0, 4);
 }
@@ -171,8 +171,8 @@ async function getRemotive():Promise<LiveGig[]>{
 }
 
 export async function GET() {
-  const jobs = await Promise.allSettled([getGitHub(),getHackerNews(),getJobicy(),getRemotive(),getRemoteOK(),getArbeitnow()]);
-  const names = ["GitHub","Hacker News","Jobicy","Remotive","Remote OK","Arbeitnow"];
+  const jobs = await Promise.allSettled([getGitHub(),getHackerNews(),getJobicy(),getRemotive(),getRemoteOK(),getArbeitnow(),getReddit("forhire"),getReddit("jobbit")]);
+  const names = ["GitHub","Hacker News","Jobicy","Remotive","Remote OK","Arbeitnow","Reddit r/forhire","Reddit r/jobbit"];
   const sources = jobs.map((result, index) => ({ name: names[index], ok: result.status === "fulfilled" }));
   const gigs = jobs.flatMap(result => result.status === "fulfilled" ? result.value : []);
   const unique = [...new Map(gigs.map(gig => [gig.sourceUrl, gig])).values()]
