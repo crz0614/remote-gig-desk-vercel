@@ -1,8 +1,8 @@
 # Multilingual Support Copilot
 
-Privacy-safe AI customer support and email automation portfolio project built with Next.js and TypeScript.
+Privacy-safe public issue triage portfolio project built with Next.js and TypeScript.
 
-The demo includes multilingual intent detection, Chinese translations, priority routing, knowledge-grounded drafts, citations and explicit human approval. Public demos use fictional messages only.
+The deployment reads current public issues from the official GitHub API and preserves an original-source link for every record. It does not pretend to be connected to Gmail or an LLM: translation and reply generation remain explicitly unavailable until real providers are configured.
 
 ## Run
 
@@ -13,9 +13,9 @@ npm run dev
 
 ## API
 
-- `GET /api/inbox` returns the fictional normalized inbox.
-- `POST /api/draft` with `{ "ticketId": "m-1042" }` returns a grounded draft and approval requirement.
+- `GET /api/inbox` returns normalized live public GitHub issues plus per-source health.
+- `POST /api/draft` returns `503 llm_not_configured`; it never fabricates a reply.
 
 ## 中文
 
-这是一个多语言 AI 客服与邮件自动化作品集，展示意图识别、中文翻译、优先级分流、知识库引用、回复草稿和人工确认流程。公开版不连接真实邮箱，也不包含真实客户数据。
+这是一个真实公开 Issue 分流作品集。数据来自 GitHub 官方 API，每条记录保留原始链接。公开版没有 Gmail 和 LLM 授权，因此会明确显示未连接，不会虚构邮件、中文翻译、知识库引用或回复结果。

@@ -1,1 +1,1 @@
-import {groundedDraft,tickets} from "@/lib/inbox";export async function POST(request:Request){const {ticketId}=await request.json();const ticket=tickets.find(x=>x.id===ticketId);if(!ticket)return Response.json({error:"ticket_not_found"},{status:404});return Response.json({draft:groundedDraft(ticket),grounding:"verified-knowledge-only"});}
+export async function POST(){return Response.json({error:"llm_not_configured",message:"No LLM provider is connected to this public deployment. A reply was not fabricated."},{status:503})}

@@ -1,15 +1,6 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import fs from "node:fs";
-
-const source=fs.readFileSync(new URL("../lib/opportunities.ts",import.meta.url),"utf8");
-test("demo opportunities use fictional companies and original links are not embedded",()=>{
-  for(const company of ["SignalForge","Northstar Labs","Orbit Cloud","Atlas Security","Canvas AI"]) assert.match(source,new RegExp(company));
-  assert.doesNotMatch(source,/mailto:|linkedin\.com\/in|@gmail\.com/i);
-});
-test("every demo opportunity has an explicit budget and match score",()=>{
-  const records=[...source.matchAll(/\{ id:/g)].length;
-  assert.equal(records,5);
-  assert.equal([...source.matchAll(/budget:"/g)].length,5);
-  assert.equal([...source.matchAll(/match:\d/g)].length,5);
-});
+import test from"node:test";import assert from"node:assert/strict";import fs from"node:fs";
+const data=fs.readFileSync(new URL("../lib/opportunities.ts",import.meta.url),"utf8");const route=fs.readFileSync(new URL("../app/api/opportunities/route.ts",import.meta.url),"utf8");const page=fs.readFileSync(new URL("../app/page.tsx",import.meta.url),"utf8");
+test("opportunities come from live public collectors",()=>{assert.match(route,/remotive\.com\/api/);assert.match(route,/api\.github\.com\/search\/issues/);assert.match(route,/mode:"live-public-data"/);});
+test("collector rejects zero rewards, scanners and non-technical Remotive roles",()=>{assert.match(route,/reward\\s\*=\\s\*0/);assert.match(route,/BountyScout/);assert.match(route,/developer\|engineer\|software/);});
+test("every record retains a verifiable source URL",()=>{assert.match(data,/sourceUrl:string/);assert.match(page,/Open original listing/);assert.doesNotMatch(data,/SignalForge|Northstar Labs|Orbit Cloud|Atlas Security|Canvas AI/);});
+test("all primary navigation views have implemented content",()=>{for(const view of ["Discover","Pipeline","AI Studio","Automations","Docs"])assert.match(page,new RegExp(view));assert.match(page,/navigator\.clipboard/);assert.match(page,/type="checkbox"/);});
