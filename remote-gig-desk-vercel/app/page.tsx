@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PortfolioBuilder from "./portfolio-builder";
 
 type Gig = { id:string; title:string; source:string; sourceUrl:string; publishedAt:string; budget:string; match:number; competition:"低"|"中"; skills:string[]; summary:string; fullText:string; remote:string; application:string };
@@ -94,12 +94,21 @@ export default function Home(){
   const [replies,setReplies]=useState<Reply[]>([]); const [selectedReply,setSelectedReply]=useState<Reply|null>(null);
   const [syncingMail,setSyncingMail]=useState(false); const [mailNotice,setMailNotice]=useState("");
   const [translation,setTranslation]=useState(""); const [translatedTitle,setTranslatedTitle]=useState(""); const [translating,setTranslating]=useState(false); const [showOriginal,setShowOriginal]=useState(false);
+  const mailSyncInFlight=useRef(false); const lastAutomaticMailSync=useRef(0);
 
   const load=async()=>{ setLoading(true);setError("");try{const r=await fetch(`/api/gigs?v=12&t=${Date.now()}`,{cache:'no-store'});if(!r.ok)throw new Error();setData(await r.json());}catch{setError("暂时无法获取项目，请稍后重试");}finally{setLoading(false);} };
   const loadBackend=async()=>{try{const [c,a,r]=await Promise.all([fetch('/api/connections',{cache:'no-store'}),fetch('/api/applications',{cache:'no-store'}),fetch('/api/replies',{cache:'no-store'})]);if(c.ok){const connectionData=await c.json();setConnections(connectionData.channels||[]);setAuthenticatedSites(connectionData.authenticatedSites||[]);setBrowserAgents(connectionData.browserAgents||[]);}if(a.ok){const apps=(await a.json()).applications||[];setApplications(apps);setApplied(apps.map((x:ApplicationRecord)=>x.gigId));}if(r.ok)setReplies((await r.json()).replies||[]);}catch{}};
   const createBrowserAgent=async()=>{setPairing(true);try{const r=await fetch('/api/connections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create_browser_agent',name:'我的 Chrome'})});const result=await r.json();if(!r.ok)throw new Error(result.error||'pairing_failed');setPairingToken(result.token||'');await loadBackend();}catch(error){setMailNotice(`浏览器配对失败：${error instanceof Error?error.message:'请重试'}`);}finally{setPairing(false);}};
-  const syncGmail=async()=>{setSyncingMail(true);setMailNotice('');try{const r=await fetch('/api/gmail/sync',{method:'POST'});const result=await r.json();if(!r.ok)throw new Error(result.error||'sync_failed');setMailNotice(`已同步 ${result.synced||0} 封申请相关邮件`);await loadBackend();}catch(error){setMailNotice(`同步失败：${error instanceof Error?error.message:'请重试'}`);}finally{setSyncingMail(false);}};
-  useEffect(()=>{ try{setSaved(JSON.parse(localStorage.getItem('gig-saved')||'[]'));}catch{} load();loadBackend(); },[]);
+  const syncGmail=async(silent=false)=>{if(mailSyncInFlight.current)return;mailSyncInFlight.current=true;if(!silent){setSyncingMail(true);setMailNotice('');}try{const r=await fetch('/api/gmail/sync',{method:'POST',cache:'no-store'});const result=await r.json();if(!r.ok)throw new Error(result.error||'sync_failed');if(!silent)setMailNotice(`已同步 ${result.synced||0} 封申请相关邮件`);await loadBackend();}catch(error){if(!silent)setMailNotice(`同步失败：${error instanceof Error?error.message:'请重试'}`);}finally{mailSyncInFlight.current=false;if(!silent)setSyncingMail(false);}};
+  useEffect(()=>{
+    try{setSaved(JSON.parse(localStorage.getItem('gig-saved')||'[]'));}catch{}
+    load();loadBackend();
+    const refreshMail=()=>{const now=Date.now();if(document.visibilityState!=='visible'||now-lastAutomaticMailSync.current<60_000)return;lastAutomaticMailSync.current=now;void syncGmail(true);};
+    refreshMail();
+    document.addEventListener('visibilitychange',refreshMail);
+    window.addEventListener('focus',refreshMail);
+    return()=>{document.removeEventListener('visibilitychange',refreshMail);window.removeEventListener('focus',refreshMail);};
+  },[]);
   const toggleSave=(id:string)=>setSaved(v=>{const n=v.includes(id)?v.filter(x=>x!==id):[...v,id];localStorage.setItem('gig-saved',JSON.stringify(n));return n;});
   const markApplied=(id:string)=>setApplied(v=>{const n=v.includes(id)?v:[...v,id];localStorage.setItem('gig-applied',JSON.stringify(n));return n;});
   const toggleChecked=(id:string)=>setChecked(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
@@ -177,7 +186,7 @@ export default function Home(){
             </article>;
           }):<div className="auth-empty">完成一次 OAuth 授权或平台登录后，这里会显示账号、认证方式和最近核验时间。</div>}</div>
         </section>
-        <a className="oauth-connect" href="/api/oauth/github/start">授权 GitHub 自动投递</a><a className="oauth-connect" href="/api/oauth/google/start">授权 Gmail 读取回复与发送申请</a><button className="oauth-connect" disabled={syncingMail} onClick={syncGmail}>{syncingMail?"正在同步 Gmail…":"立即同步 Gmail 申请回复"}</button>{mailNotice&&<p className="application-note">{mailNotice}</p>}{connections.length?connections.map(channel=><article className="connection-card" key={channel.id}><div><span className={`connection-dot ${channel.status}`}/><h3>{channel.name}</h3></div><p>{channel.capability}</p><b>{channel.status==='connected'?`已连接${channel.accountLabel?` · ${channel.accountLabel}`:''}`:channel.status==='manual_only'?'该来源没有统一申请账号':channel.status==='adapter_planned'?'按具体甲方表单建立会话':channel.status==='manual_checkpoint'?'遇到验证码或身份确认时由你接手':'等待 OAuth 授权'}</b></article>):<div className="loading-card"><i/><b>正在读取渠道状态</b><span>连接状态必须由后端验证</span></div>}</div>:activeTab==='我的'?<PortfolioBuilder/>:
+        <a className="oauth-connect" href="/api/oauth/github/start">授权 GitHub 自动投递</a><a className="oauth-connect" href="/api/oauth/google/start">授权 Gmail 读取回复与发送申请</a><button className="oauth-connect" disabled={syncingMail} onClick={()=>void syncGmail()}>{syncingMail?"正在同步 Gmail…":"立即同步 Gmail 申请回复"}</button>{mailNotice&&<p className="application-note">{mailNotice}</p>}{connections.length?connections.map(channel=><article className="connection-card" key={channel.id}><div><span className={`connection-dot ${channel.status}`}/><h3>{channel.name}</h3></div><p>{channel.capability}</p><b>{channel.status==='connected'?`已连接${channel.accountLabel?` · ${channel.accountLabel}`:''}`:channel.status==='manual_only'?'该来源没有统一申请账号':channel.status==='adapter_planned'?'按具体甲方表单建立会话':channel.status==='manual_checkpoint'?'遇到验证码或身份确认时由你接手':'等待 OAuth 授权'}</b></article>):<div className="loading-card"><i/><b>正在读取渠道状态</b><span>连接状态必须由后端验证</span></div>}</div>:activeTab==='我的'?<PortfolioBuilder/>:
       loading?<div className="loading-card"><i/><b>正在获取真实项目</b><span>检查来源与原始链接…</span></div>:
       error?<div className="empty-card"><h3>获取失败</h3><p>{error}</p><button className="retry" onClick={load}>重新获取</button></div>:
       visible.length?visible.map((gig,index)=><article className={`gig-card ${index===0&&activeTab==='机会'?'featured':''}`} key={gig.id}>
