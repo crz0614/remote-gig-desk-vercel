@@ -5,7 +5,7 @@ import { db, ensureDatabase } from "../../../db";
 const channels=[
   {id:"github",name:"GitHub Issues / Bounties",mode:"direct",capability:"授权后可通过官方 API 发布申请评论",status:"authorization_required"},
   {id:"gmail",name:"Gmail",mode:"direct",capability:"授权后可发送邮件申请并读取回复",status:"authorization_required"},
-  {id:"hackernews",name:"Hacker News",mode:"manual",capability:"官方 API 只读，申请必须在原站人工发布",status:"manual_only"},
+  {id:"hackernews",name:"Hacker News",mode:"browser",capability:"复用浏览器会话，并把最终申请入口交给浏览器执行器",status:"browser_agent_required"},
   {id:"greenhouse",name:"Greenhouse",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
   {id:"lever",name:"Lever",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
   {id:"ashby",name:"Ashby",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
@@ -70,8 +70,10 @@ export async function POST(request:Request){
       await sql`INSERT INTO platform_sessions(id,owner_email,platform_key,status,verified_at,updated_at,account_label,auth_method,site_url,last_checked_at)
         VALUES(${randomUUID()},${agent.ownerEmail},${platformKey},${"verified"},${now},${now},${String(body.accountLabel||"")},${"browser_extension"},${String(body.siteUrl||"")},${now})
         ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verified"},verified_at=${now},updated_at=${now},account_label=${String(body.accountLabel||"")},auth_method=${"browser_extension"},site_url=${String(body.siteUrl||"")},last_checked_at=${now}`;
+      await sql`UPDATE applications SET status=${"queued_for_browser"},delivery_state=${"session_reused"},last_error=${""},updated_at=${now} WHERE owner_email=${agent.ownerEmail} AND platform_key=${platformKey} AND status=${"verification_required"}`;
     }
-    return Response.json({ok:true,agentId:agent.id,heartbeatAt:now},{headers:agentCors});
+    const tasks=await sql`SELECT id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate" FROM applications WHERE owner_email=${agent.ownerEmail} AND status=${"queued_for_browser"} ORDER BY created_at ASC LIMIT 20`;
+    return Response.json({ok:true,agentId:agent.id,heartbeatAt:now,tasks},{headers:agentCors});
   }
   const user=await getChatGPTUser();
   if(!user)return Response.json({error:"sign_in_required"},{status:401});

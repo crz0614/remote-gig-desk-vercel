@@ -5,13 +5,19 @@ async function sync(){
   if(!agentToken)return;
   const headers={"Content-Type":"application/json","Authorization":"Bearer "+agentToken};
   try{
-    await fetch(API,{method:"POST",headers,body:JSON.stringify({action:"heartbeat"})});
+    const heartbeat=await fetch(API,{method:"POST",headers,body:JSON.stringify({action:"heartbeat"})});
+    const heartbeatData=await heartbeat.json();
+    if(!heartbeat.ok)throw new Error(heartbeatData.error||"heartbeat_failed");
     const hnCookie=await chrome.cookies.get({url:"https://news.ycombinator.com",name:"user"});
     if(hnCookie&&hnUsername){
-      await fetch(API,{method:"POST",headers,body:JSON.stringify({
+      const sessionResponse=await fetch(API,{method:"POST",headers,body:JSON.stringify({
         action:"record_session",platformKey:"hackernews",accountLabel:hnUsername,
         siteUrl:"https://news.ycombinator.com"
       })});
+      const sessionData=await sessionResponse.json();
+      await chrome.storage.local.set({queuedTasks:sessionData.tasks||heartbeatData.tasks||[]});
+    }else{
+      await chrome.storage.local.set({queuedTasks:heartbeatData.tasks||[]});
     }
     await chrome.storage.local.set({lastSync:Date.now(),lastError:""});
   }catch(error){

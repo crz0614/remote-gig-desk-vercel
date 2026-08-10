@@ -19,19 +19,15 @@ export async function POST(request: Request) {
   if (body.action === "needs_verification") {
     status = "verification_required";
     await sql`INSERT INTO platform_sessions (id,owner_email,platform_key,status,updated_at) VALUES (${crypto.randomUUID()},${user.email},${platformKey},${status},${now}) ON CONFLICT (owner_email,platform_key) DO UPDATE SET status=EXCLUDED.status,updated_at=EXCLUDED.updated_at`;
-    const affected = await sql`UPDATE applications SET status=${status},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status IN (${"detecting_destination"},${"manual_submission_required"},${"submission_failed"},${"verification_required"}) RETURNING id`;
+    const affected = await sql`UPDATE applications SET status=${status},delivery_state=${"verification_required"},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status IN (${"detecting_destination"},${"queued_for_browser"},${"submission_failed"},${"verification_required"}) RETURNING id`;
     affectedIds = (affected as any[]).map(row => String(row.id));
     message = "该平台队列已统一暂停，只需完成一次登录或验证码";
   } else if (body.action === "verify_platform") {
-    status = "manual_submission_required";
+    status = "queued_for_browser";
     await sql`INSERT INTO platform_sessions (id,owner_email,platform_key,status,verified_at,updated_at) VALUES (${crypto.randomUUID()},${user.email},${platformKey},${"verified"},${now},${now}) ON CONFLICT (owner_email,platform_key) DO UPDATE SET status=EXCLUDED.status,verified_at=EXCLUDED.verified_at,updated_at=EXCLUDED.updated_at`;
-    const affected = await sql`UPDATE applications SET status=${status},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status=${"verification_required"} RETURNING id`;
+    const affected = await sql`UPDATE applications SET status=${status},delivery_state=${"session_reused"},last_error=${""},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status=${"verification_required"} RETURNING id`;
     affectedIds = (affected as any[]).map(row => String(row.id));
     message = "平台验证已记录，同平台任务无需再次验证";
-  } else if (body.action === "mark_submitted") {
-    status = "manual_confirmed";
-    message = "你已确认在原平台完成提交；尚无平台接口回执";
-    await sql`UPDATE applications SET status=${status},delivery_state=${"user_confirmed"},last_error=${""},updated_at=${now} WHERE id=${body.id} AND owner_email=${user.email}`;
   } else if (body.action === "cancel") {
     status = "cancelled";
     message = "申请任务已取消";

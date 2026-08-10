@@ -56,3 +56,12 @@ export function platformKeyForUrl(value: string | null | undefined, fallback: st
 export function isReusablePlatformSession(session: { status?: string; expiresAt?: string | number | null } | undefined, now = Date.now()) {
   return session?.status === "verified" && (!session.expiresAt || Number(session.expiresAt) > now);
 }
+
+export function applicationStateForSession(
+  session: { status?: string; expiresAt?: string | number | null } | undefined,
+  now = Date.now(),
+) {
+  return isReusablePlatformSession(session, now)
+    ? { status: "queued_for_browser", deliveryState: "session_reused", eventType: "SESSION_REUSED" }
+    : { status: "verification_required", deliveryState: "verification_required", eventType: "VERIFICATION_REQUIRED" };
+}
