@@ -1,0 +1,1 @@
+import {groundedDraft,tickets} from "@/lib/inbox";export async function POST(request:Request){const {ticketId}=await request.json();const ticket=tickets.find(x=>x.id===ticketId);if(!ticket)return Response.json({error:"ticket_not_found"},{status:404});return Response.json({draft:groundedDraft(ticket),grounding:"verified-knowledge-only"});}
