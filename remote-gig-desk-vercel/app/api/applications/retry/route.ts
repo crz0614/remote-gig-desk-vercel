@@ -2,6 +2,7 @@ import { getChatGPTUser } from "../../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../../db";
 import { unseal } from "../../../../lib/secret-store";
 import { getGoogleToken } from "../../../../lib/google";
+import { applicationStateForSession } from "../../../../lib/application-url";
 
 function safeHeader(value: string) { return value.replace(/[\r\n]+/g, " ").trim(); }
 function base64Url(value: string) { return Buffer.from(value, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
@@ -50,16 +51,16 @@ export async function POST(request: Request) {
         if (!response.ok) throw new Error("github_" + response.status);
         status = "submitted"; deliveryState = "platform_accepted"; receiptId = String(posted.id || ""); receiptUrl = posted.html_url || ""; deliveredAt = Date.now();
       } else {
-        const sessions = await sql`SELECT status FROM platform_sessions WHERE owner_email=${user.email} AND platform_key=${application.platformKey} LIMIT 1`;
-        const verified = (sessions[0] as any)?.status === "verified";
-        status = verified ? "manual_submission_required" : "verification_required";
-        deliveryState = verified ? "platform_session_verified" : "verification_required";
-        error = verified ? "manual_form_submission_required" : "platform_verification_required";
+        const sessions = await sql`SELECT status,expires_at AS "expiresAt" FROM platform_sessions WHERE owner_email=${user.email} AND platform_key=${application.platformKey} LIMIT 1`;
+        const next = applicationStateForSession(sessions[0] as any, Date.now());
+        status = next.status;
+        deliveryState = next.deliveryState;
+        error = next.status === "verification_required" ? "platform_verification_required" : "";
       }
     } catch (cause) { error = cause instanceof Error ? cause.message : "submission_failed"; }
     const now = Date.now();
     await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},receipt_id=${receiptId},receipt_url=${receiptUrl},delivered_at=${deliveredAt},last_error=${error},updated_at=${now} WHERE id=${application.id} AND owner_email=${user.email}`;
-    const message = deliveryState === "platform_accepted" ? "平台接口已确认接收申请并返回回执" : status === "verification_required" ? "等待完成一次平台登录或验证码" : error ? "未获得平台接收回执：" + error : "任务状态已更新";
+    const message = deliveryState === "platform_accepted" ? "平台接口已确认接收申请并返回回执" : deliveryState === "session_reused" ? "已复用平台会话，任务重新进入浏览器执行队列" : status === "verification_required" ? "等待完成一次平台登录或验证码" : error ? "未获得平台接收回执：" + error : "任务状态已更新";
     await sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${application.id},${"delivery_retry"},${status},${message},${receiptId},${receiptUrl},${now})`;
     await sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_retry"},${application.id},${error || status},${now})`;
     results.push({ id: application.id, status, deliveryState, receiptId, receiptUrl, error: error || undefined });

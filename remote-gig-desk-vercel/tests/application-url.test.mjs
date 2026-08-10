@@ -29,3 +29,11 @@ test("reuses a verified Hacker News session only while it is valid",()=>{
   assert.equal(helpers.isReusablePlatformSession({status:"verified",expiresAt:500},1_000),false);
   assert.equal(helpers.isReusablePlatformSession({status:"verification_required"},1_000),false);
 });
+
+test("queues every same-platform task after one reusable session",()=>{
+  const session={status:"verified",expiresAt:2_000};
+  const first=helpers.applicationStateForSession(session,1_000);
+  const second=helpers.applicationStateForSession(session,1_000);
+  assert.deepEqual(first,{status:"queued_for_browser",deliveryState:"session_reused",eventType:"SESSION_REUSED"});
+  assert.deepEqual(second,first);
+});
