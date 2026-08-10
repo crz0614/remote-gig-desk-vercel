@@ -1,4 +1,4 @@
-# Multilingual Support Copilot
+# Public Issue Triage
 
 Privacy-safe public issue triage portfolio project built with Next.js and TypeScript.
 
