@@ -9,8 +9,17 @@ test("translates each opportunity from its own title and original description", 
   assert.doesNotMatch(page, /function chineseBrief/);
   assert.match(page, /translate\(gig\.title\)/);
   assert.match(page, /translate\(gig\.fullText\|\|gig\.summary\)/);
-  assert.match(page, /gig-zh-v5-/);
+  assert.match(page, /gig-zh-v6-complete-/);
   assert.match(page, /本次逐岗位翻译失败，未使用通用模板替代/);
+});
+
+test("keeps full source text and uses complete AI translation", () => {
+  const translationRoute = fs.readFileSync(new URL("../app/api/translate/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(gigsRoute, /fullText:\s*body\.slice\(0,\s*1400\)/);
+  assert.match(gigsRoute, /fullText:\s*body\.slice\(0,\s*30000\)/);
+  assert.match(translationRoute, /Translate every sentence faithfully and completely/);
+  assert.match(translationRoute, /translated\.length===parts\.length/);
+  assert.doesNotMatch(translationRoute, /mymemory\.translated\.net/);
 });
 
 test("never presents a fabricated quote when the client did not publish one", () => {

@@ -28,6 +28,10 @@ function clean(value = "") {
     .trim();
 }
 
+function cleanDescription(value=""){
+  return value.replace(/<br\s*\/?\s*>|<\/(?:p|div|li|h[1-6])>/gi,"\n").replace(/<li[^>]*>/gi,"• ").replace(/<[^>]+>/g," ").replace(/!\[[^\]]*\]\([^)]*\)/g," ").replace(/\[([^\]]+)\]\(([^)]+)\)/g,"$1 ($2)").replace(/^\s{0,3}#{1,6}\s*/gm,"").replace(/\*\*|__|`{1,3}|~~/g,"").replace(/&[a-z]+;/gi," ").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();
+}
+
 function isAggregatorIssue(item: any) {
   const title = `${item.title ?? ""}`;
   const body = `${item.body ?? ""}`;
@@ -78,8 +82,8 @@ async function getReddit(subreddit: string): Promise<LiveGig[]> {
   ).slice(0, 10).map((p: any): LiveGig => {
     const text = clean(`${p.title} ${p.selftext ?? ""}`);
     const ageHours = (Date.now() / 1000 - p.created_utc) / 3600;
-    const body=clean(p.selftext ?? "");
-    return { id: `reddit-${p.id}`, title: clean(p.title).replace(/^\s*\[?hiring\]?\s*[-:]?\s*/i, ""), source: `Reddit · r/${subreddit}`, sourceUrl: `https://www.reddit.com${p.permalink}`, publishedAt: new Date(p.created_utc * 1000).toISOString(), budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210) || "打开原始需求查看项目说明与联系方式。", fullText:body.slice(0,1400), remote:/remote/i.test(text)?"明确远程":"需向甲方确认", application:"按照帖子中的邮箱、私信或申请链接联系甲方", match: score(text, ageHours), competition: p.num_comments < 8 ? "低" : "中" };
+    const body=cleanDescription(p.selftext ?? "");
+    return { id: `reddit-${p.id}`, title: clean(p.title).replace(/^\s*\[?hiring\]?\s*[-:]?\s*/i, ""), source: `Reddit · r/${subreddit}`, sourceUrl: `https://www.reddit.com${p.permalink}`, publishedAt: new Date(p.created_utc * 1000).toISOString(), budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210) || "打开原始需求查看项目说明与联系方式。", fullText:body.slice(0,30000), remote:/remote/i.test(text)?"明确远程":"需向甲方确认", application:"按照帖子中的邮箱、私信或申请链接联系甲方", match: score(text, ageHours), competition: p.num_comments < 8 ? "低" : "中" };
   });
 }
 
@@ -96,8 +100,8 @@ async function getGitHub(): Promise<LiveGig[]> {
   return items.filter((i: any) => !i.pull_request && !isAggregatorIssue(i) && clean(i.body ?? "").length >= 40).slice(0, 12).map((i: any): LiveGig => {
     const text = clean(`${i.title} ${i.body ?? ""}`);
     const ageHours = (Date.now() - new Date(i.created_at).getTime()) / 3600000;
-    const body=clean(i.body ?? "");
-    return { id: `github-${i.id}`, title: clean(i.title), source: "GitHub · 开放 Issue", sourceUrl: i.html_url, publishedAt: i.created_at, budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210) || "打开原始 Issue 查看任务说明与悬赏条件。", fullText:body.slice(0,1400), remote:"远程开源任务", application:"在 Issue 下确认领取方式，按仓库要求提交代码或方案", match: score(text, ageHours), competition: (i.comments ?? 0) < 6 ? "低" : "中" };
+    const body=cleanDescription(i.body ?? "");
+    return { id: `github-${i.id}`, title: clean(i.title), source: "GitHub · 开放 Issue", sourceUrl: i.html_url, publishedAt: i.created_at, budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210) || "打开原始 Issue 查看任务说明与悬赏条件。", fullText:body.slice(0,30000), remote:"远程开源任务", application:"在 Issue 下确认领取方式，按仓库要求提交代码或方案", match: score(text, ageHours), competition: (i.comments ?? 0) < 6 ? "低" : "中" };
   });
 }
 
@@ -111,12 +115,12 @@ async function getRemoteOK(): Promise<LiveGig[]> {
     const text = `${j.position ?? ""} ${(j.tags ?? []).join(" ")} ${j.description ?? ""}`;
     return j.id && /(contract|freelance|part.?time|temporary)/i.test(text);
   }).slice(0, 12).map((j: any): LiveGig => {
-    const body = clean(j.description ?? "");
+    const body = cleanDescription(j.description ?? "");
     const text = `${j.position} ${body} ${(j.tags ?? []).join(" ")}`;
     const publishedAt = j.date || j.epoch ? new Date(j.date || j.epoch * 1000).toISOString() : new Date().toISOString();
     const ageHours = (Date.now() - new Date(publishedAt).getTime()) / 3600000;
     const salary = j.salary_min ? `$${Number(j.salary_min).toLocaleString()}–$${Number(j.salary_max || j.salary_min).toLocaleString()}/年` : budgetFor(text);
-    return { id: `remoteok-${j.id}`, title: `${clean(j.position)} · ${clean(j.company ?? "甲方")}`, source: "Remote OK · 合同岗位", sourceUrl: j.url || j.apply_url, publishedAt, budget: salary, skills: skillsFor(text), summary: body.slice(0, 210), fullText: body.slice(0, 1400), remote: j.location ? `远程 · ${clean(j.location)}` : "明确远程", application: "通过 Remote OK 原始职位页进入甲方申请入口", match: score(text, ageHours), competition: "中" };
+    return { id: `remoteok-${j.id}`, title: `${clean(j.position)} · ${clean(j.company ?? "甲方")}`, source: "Remote OK · 合同岗位", sourceUrl: j.url || j.apply_url, publishedAt, budget: salary, skills: skillsFor(text), summary: body.slice(0, 210), fullText: body.slice(0,30000), remote: j.location ? `远程 · ${clean(j.location)}` : "明确远程", application: "通过 Remote OK 原始职位页进入甲方申请入口", match: score(text, ageHours), competition: "中" };
   });
 }
 
@@ -128,11 +132,11 @@ async function getArbeitnow(): Promise<LiveGig[]> {
     const text = `${j.title ?? ""} ${(j.job_types ?? []).join(" ")} ${(j.tags ?? []).join(" ")} ${j.description ?? ""}`;
     return j.remote === true && /(contract|freelance|part.?time|temporary)/i.test(text);
   }).slice(0, 12).map((j: any): LiveGig => {
-    const body = clean(j.description ?? "");
+    const body = cleanDescription(j.description ?? "");
     const text = `${j.title} ${body} ${(j.tags ?? []).join(" ")}`;
     const publishedAt = typeof j.created_at === "number" ? new Date(j.created_at * 1000).toISOString() : new Date(j.created_at || Date.now()).toISOString();
     const ageHours = (Date.now() - new Date(publishedAt).getTime()) / 3600000;
-    return { id: `arbeitnow-${j.slug}`, title: `${clean(j.title)} · ${clean(j.company_name ?? "甲方")}`, source: "Arbeitnow · 远程合同", sourceUrl: j.url, publishedAt, budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210), fullText: body.slice(0, 1400), remote: "明确远程", application: "通过 Arbeitnow 原始职位页进入甲方申请入口", match: score(text, ageHours), competition: "中" };
+    return { id: `arbeitnow-${j.slug}`, title: `${clean(j.title)} · ${clean(j.company_name ?? "甲方")}`, source: "Arbeitnow · 远程合同", sourceUrl: j.url, publishedAt, budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210), fullText: body.slice(0,30000), remote: "明确远程", application: "通过 Arbeitnow 原始职位页进入甲方申请入口", match: score(text, ageHours), competition: "中" };
   });
 }
 
@@ -159,20 +163,20 @@ async function getHackerNews(): Promise<LiveGig[]> {
     const text = clean(h.comment_text ?? "");
     const ageHours = (Date.now() / 1000 - h.created_at_i) / 3600;
     const company = text.split(/[|\n]/)[0].trim().slice(0, 70);
-    return { id: `hn-${h.objectID}`, title: company || "Hacker News 远程技术需求", source: "Hacker News · Who is hiring", sourceUrl: `https://news.ycombinator.com/item?id=${h.objectID}`, publishedAt: h.created_at, budget: budgetFor(text), skills: skillsFor(text), summary: text.slice(0, 210), fullText:text.slice(0,1400), remote:"明确远程", application:"使用评论中提供的邮箱或申请链接联系招聘方", match: score(text, ageHours), competition: "低" };
+    return { id: `hn-${h.objectID}`, title: company || "Hacker News 远程技术需求", source: "Hacker News · Who is hiring", sourceUrl: `https://news.ycombinator.com/item?id=${h.objectID}`, publishedAt: h.created_at, budget: budgetFor(text), skills: skillsFor(text), summary: text.slice(0, 210), fullText:text.slice(0,30000), remote:"明确远程", application:"使用评论中提供的邮箱或申请链接联系招聘方", match: score(text, ageHours), competition: "低" };
   });
 }
 
 async function getJobicy():Promise<LiveGig[]>{
   const response=await fetch("https://jobicy.com/api/v2/remote-jobs?count=50&industry=engineering",{signal:AbortSignal.timeout(7000)});
   if(!response.ok)throw new Error(`Jobicy ${response.status}`); const json=await response.json() as any;
-  return (json.jobs??[]).filter((j:any)=>/(contract|freelance|part.?time)/i.test((j.jobType??[]).join(" "))).slice(0,12).map((j:any):LiveGig=>{const body=clean(j.jobDescription??j.jobExcerpt??"");const text=`${j.jobTitle} ${body}`;const ageHours=(Date.now()-new Date(j.pubDate).getTime())/3600000;return{id:`jobicy-${j.id}`,title:`${j.jobTitle} · ${j.companyName}`,source:"Jobicy · 远程合同",sourceUrl:j.url,publishedAt:j.pubDate,budget:j.annualSalaryMin?`$${j.annualSalaryMin.toLocaleString()}–${j.annualSalaryMax?.toLocaleString()??""}/年`:budgetFor(text),skills:skillsFor(text),summary:body.slice(0,210),fullText:body.slice(0,1400),remote:j.jobGeo?`远程 · ${j.jobGeo}`:"远程",application:"通过 Jobicy 原始职位页提交简历和申请信息",match:score(text,ageHours),competition:"中"};});
+  return (json.jobs??[]).filter((j:any)=>/(contract|freelance|part.?time)/i.test((j.jobType??[]).join(" "))).slice(0,12).map((j:any):LiveGig=>{const body=cleanDescription(j.jobDescription??j.jobExcerpt??"");const text=`${j.jobTitle} ${body}`;const ageHours=(Date.now()-new Date(j.pubDate).getTime())/3600000;return{id:`jobicy-${j.id}`,title:`${j.jobTitle} · ${j.companyName}`,source:"Jobicy · 远程合同",sourceUrl:j.url,publishedAt:j.pubDate,budget:j.annualSalaryMin?`$${j.annualSalaryMin.toLocaleString()}–${j.annualSalaryMax?.toLocaleString()??""}/年`:budgetFor(text),skills:skillsFor(text),summary:body.slice(0,210),fullText:body.slice(0,30000),remote:j.jobGeo?`远程 · ${j.jobGeo}`:"远程",application:"通过 Jobicy 原始职位页提交简历和申请信息",match:score(text,ageHours),competition:"中"};});
 }
 
 async function getRemotive():Promise<LiveGig[]>{
   const response=await fetch("https://remotive.com/api/remote-jobs?category=software-dev&limit=60",{signal:AbortSignal.timeout(7000)});
   if(!response.ok)throw new Error(`Remotive ${response.status}`);const json=await response.json() as any;
-  return (json.jobs??[]).filter((j:any)=>/(contract|freelance|part.?time)/i.test(j.job_type??"")).slice(0,12).map((j:any):LiveGig=>{const body=clean(j.description??"");const text=`${j.title} ${body}`;const ageHours=(Date.now()-new Date(j.publication_date).getTime())/3600000;return{id:`remotive-${j.id}`,title:`${j.title} · ${j.company_name}`,source:"Remotive · 远程合同",sourceUrl:j.url,publishedAt:j.publication_date,budget:j.salary||budgetFor(text),skills:skillsFor(text),summary:body.slice(0,210),fullText:body.slice(0,1400),remote:j.candidate_required_location?`远程 · ${j.candidate_required_location}`:"远程",application:"通过 Remotive 原始职位页进入甲方申请入口",match:score(text,ageHours),competition:"中"};});
+  return (json.jobs??[]).filter((j:any)=>/(contract|freelance|part.?time)/i.test(j.job_type??"")).slice(0,12).map((j:any):LiveGig=>{const body=cleanDescription(j.description??"");const text=`${j.title} ${body}`;const ageHours=(Date.now()-new Date(j.publication_date).getTime())/3600000;return{id:`remotive-${j.id}`,title:`${j.title} · ${j.company_name}`,source:"Remotive · 远程合同",sourceUrl:j.url,publishedAt:j.publication_date,budget:j.salary||budgetFor(text),skills:skillsFor(text),summary:body.slice(0,210),fullText:body.slice(0,30000),remote:j.candidate_required_location?`远程 · ${j.candidate_required_location}`:"远程",application:"通过 Remotive 原始职位页进入甲方申请入口",match:score(text,ageHours),competition:"中"};});
 }
 
 export async function GET() {
