@@ -1134,6 +1134,25 @@ svg {
   display: grid;
   gap: 12px;
 }
+.mail-sync-card {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.mail-sync-card > div { display: grid; gap: 4px; }
+.mail-sync-card small { color: var(--muted); line-height: 1.5; }
+.mail-sync-card.ok { border-color: color-mix(in srgb, #2ba66a 40%, var(--border)); }
+.mail-sync-card.error { border-color: color-mix(in srgb, #d94b4b 55%, var(--border)); }
+@media (max-width: 640px) {
+  .mail-sync-card { align-items: stretch; flex-direction: column; }
+  .mail-sync-card button { width: 100%; }
+}
 .reply-card {
   width: 100%;
   text-align: left;
