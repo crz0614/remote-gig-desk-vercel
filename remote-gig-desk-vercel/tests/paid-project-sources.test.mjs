@@ -22,6 +22,12 @@ test("rejects listings without both delivery and payment intent",()=>{
   assert.match(sources,/getEpwkProjects/);
   assert.match(sources,/程序员客栈 · 项目研发/);
   assert.match(sources,/一品威客 · 任务大厅/);
+  assert.match(sources,/DoneDirtCheap/);
+  assert.match(sources,/Programmers_forhire/);
+  assert.match(sources,/getThreadsProjects/);
+  assert.match(sources,/getXProjects/);
+  assert.match(sources,/workerAdvertisement/);
+  assert.match(sources,/clientRequestIntent/);
   assert.doesNotMatch(sources,/in:title paid/);
 });
 
