@@ -15,9 +15,10 @@ const channels=[
   {id:"lever",name:"Lever",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Lever 正式回执",status:"browser_agent_required"},
   {id:"ashby",name:"Ashby",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Ashby 正式回执",status:"browser_agent_required"},
   {id:"workable",name:"Workable",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Workable 正式回执",status:"browser_agent_required"},
+  {id:"proginn",name:"程序员客栈",mode:"browser",capability:"复用已登录会话，填写申请并保存平台提交回执",status:"browser_agent_required"},
   {id:"custom",name:"公司自建表单",mode:"browser",capability:"逐域名分析；验证码或身份验证需要人工处理",status:"manual_checkpoint"},
 ];
-const currentBrowserAgentVersion="0.5.0";
+const currentBrowserAgentVersion="0.6.0";
 
 export async function GET(){
   const user=await getChatGPTUser();
