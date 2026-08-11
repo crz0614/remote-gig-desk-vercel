@@ -6,7 +6,7 @@ import { generateFreeJson } from "../../../lib/free-ai";
 
 export const maxDuration = 60;
 
-const applicationPackSchema={type:"object",properties:{language:{type:"string",enum:["en","zh"]},quote:{type:"string"},matchedSkills:{type:"array",items:{type:"string"}},resume:{type:"array",items:{type:"string"}},coverLetter:{type:"string"},workMode:{type:"string"},strategy:{type:"string",enum:["github_comment","email","application_letter"]}},required:["language","quote","matchedSkills","resume","coverLetter","workMode","strategy"],additionalProperties:false};
+const applicationPackSchema={type:"object",properties:{language:{type:"string",enum:["en","zh"]},quote:{type:"string"},employerSummary:{type:"string"},requirementMatches:{type:"array",items:{type:"object",properties:{requirement:{type:"string"},advantage:{type:"string"},evidence:{type:"string"}},required:["requirement","advantage","evidence"],additionalProperties:false}},matchedSkills:{type:"array",items:{type:"string"}},resume:{type:"array",items:{type:"string"}},coverLetter:{type:"string"},workMode:{type:"string"},strategy:{type:"string",enum:["github_comment","email","application_letter"]}},required:["language","quote","employerSummary","requirementMatches","matchedSkills","resume","coverLetter","workMode","strategy"],additionalProperties:false};
 
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
