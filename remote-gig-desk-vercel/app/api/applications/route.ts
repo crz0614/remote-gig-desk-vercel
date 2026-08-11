@@ -64,11 +64,12 @@ export async function GET(){
     WHEN source_url ILIKE ${"%news.ycombinator.com%"} THEN ${"hackernews"}
     WHEN source_url ILIKE ${"%x.com%"} OR source_url ILIKE ${"%twitter.com%"} THEN ${"x"}
     WHEN source_url ILIKE ${"%threads.net%"} THEN ${"threads"}
+    WHEN source_url ILIKE ${"%proginn.com%"} THEN ${"proginn"}
     ELSE platform_key END
     WHERE owner_email=${user.email} AND platform_key=${"unknown"}`;
   await sql`UPDATE applications SET status=${"verification_required"},delivery_state=${"verification_required"},last_error=${"需要在真实平台完成登录或验证"},updated_at=${Date.now()}
     WHERE owner_email=${user.email} AND delivery_state=${"session_reused"} AND COALESCE(receipt_id,${""})=${""}
-      AND platform_key IN (${"unknown"},${"reddit"},${"hackernews"},${"x"},${"threads"})`;
+      AND platform_key IN (${"unknown"},${"reddit"},${"hackernews"},${"x"},${"threads"},${"proginn"})`;
   await sql`UPDATE platform_sessions SET status=${"verification_required"},verified_at=NULL,updated_at=${Date.now()}
     WHERE owner_email=${user.email} AND platform_key=${"unknown"} AND status=${"verified"}`;
 
