@@ -8,9 +8,11 @@ const gigsRoute = fs.readFileSync(new URL("../app/api/gigs/route.ts", import.met
 test("translates each opportunity from its own title and original description", () => {
   assert.doesNotMatch(page, /function chineseBrief/);
   assert.match(page, /translate\(gig\.title\)/);
-  assert.match(page, /translate\(gig\.fullText\|\|gig\.summary\)/);
-  assert.match(page, /gig-zh-v7-clean-html-/);
-  assert.match(page, /本次逐岗位翻译失败，未使用通用模板替代/);
+  assert.match(page, /gig\.fullText\s*\|\|\s*gig\.summary/);
+  assert.match(page, /gig-zh-v8-complete-/);
+  assert.match(page, /本次完整翻译失败，未展示残缺内容或通用模板/);
+  assert.match(page, /parsed\.sourceLength\s*===\s*source\.length/);
+  assert.match(page, /result\.complete\s*!==\s*true/);
 });
 
 test("keeps full source text and completes free translation without billing credentials", () => {
