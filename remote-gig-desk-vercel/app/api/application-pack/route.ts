@@ -2,13 +2,11 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
 import { unseal } from "../../../lib/secret-store";
 import { buildApplicationPrompt, hasUsableProfile, validateApplicationPack } from "../../../lib/application-pack";
+import { generateFreeJson } from "../../../lib/free-ai";
 
 export const maxDuration = 60;
 
-function extractJson(text: string) {
-  const clean = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  return JSON.parse(clean);
-}
+const applicationPackSchema={type:"object",properties:{language:{type:"string",enum:["en","zh"]},quote:{type:"string"},matchedSkills:{type:"array",items:{type:"string"}},resume:{type:"array",items:{type:"string"}},coverLetter:{type:"string"},workMode:{type:"string"},strategy:{type:"string",enum:["github_comment","email","application_letter"]}},required:["language","quote","matchedSkills","resume","coverLetter","workMode","strategy"],additionalProperties:false};
 
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
@@ -29,27 +27,11 @@ export async function POST(request: Request) {
   }
   if (!hasUsableProfile(profile, portfolio)) return Response.json({ error: "profile_required" }, { status: 409 });
 
-  const token = process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN || process.env.OPENAI_API_KEY;
-  if (!token) return Response.json({ error: "ai_not_configured" }, { status: 503 });
-  const directOpenAI = Boolean(process.env.OPENAI_API_KEY && !process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN);
-  const endpoint = directOpenAI ? "https://api.openai.com/v1/chat/completions" : "https://ai-gateway.vercel.sh/v1/chat/completions";
-  const model = directOpenAI ? (process.env.APPLICATION_AI_MODEL || "gpt-5.6-luna") : (process.env.APPLICATION_AI_MODEL || "openai/gpt-5.6-luna");
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages: [{ role: "user", content: buildApplicationPrompt({ gig: body.gig, profile, portfolio }) }], response_format: { type: "json_schema", json_schema: { name: "application_pack", strict: true, schema: { type: "object", properties: { language: { type: "string", enum: ["en", "zh"] }, quote: { type: "string" }, matchedSkills: { type: "array", items: { type: "string" } }, resume: { type: "array", items: { type: "string" } }, coverLetter: { type: "string" }, workMode: { type: "string" }, strategy: { type: "string", enum: ["github_comment", "email", "application_letter"] } }, required: ["language", "quote", "matchedSkills", "resume", "coverLetter", "workMode", "strategy"], additionalProperties: false } } } }),
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    console.error("application_pack_ai_failed", response.status, detail.slice(0, 300));
-    return Response.json({ error: "ai_generation_failed" }, { status: 502 });
-  }
   try {
-    const result = await response.json() as { choices?: { message?: { content?: string } }[] };
-    const pack = validateApplicationPack(extractJson(result.choices?.[0]?.message?.content || ""));
+    const pack = validateApplicationPack(await generateFreeJson(buildApplicationPrompt({ gig: body.gig, profile, portfolio }),applicationPackSchema));
     return Response.json({ ...pack, gig: body.gig, generatedByAI: true });
   } catch (error) {
     console.error("application_pack_invalid", error);
-    return Response.json({ error: "ai_response_invalid" }, { status: 502 });
+    return Response.json({ error: error instanceof Error&&error.message==="free_ai_not_configured"?"free_ai_not_configured":"ai_generation_failed" }, { status: error instanceof Error&&error.message==="free_ai_not_configured"?503:502 });
   }
 }
