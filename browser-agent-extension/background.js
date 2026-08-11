@@ -17,18 +17,33 @@ async function fillApplication(task,agentToken){
   let filledFields=0;
   const profile=task.applicantProfile||{};
   const values=[
-    [/first.?name|given.?name/i,profile.firstName],[/last.?name|family.?name|surname/i,profile.lastName],
-    [/(^|\b)full.?name|candidate.?name/i,profile.fullName],[/e-?mail/i,profile.email],[/phone|mobile/i,profile.phone],
-    [/location|city|address/i,profile.location],[/linkedin/i,profile.linkedin],[/github/i,profile.github],[/portfolio|website/i,profile.portfolio],
-    [/resume.?url|cv.?url|resume.?link/i,profile.resumeUrl],
-    [/cover|letter|message|additional|why|note/i,task.applicationLetter],[/rate|salary|compensation|budget/i,task.proposedRate],
+    [/first.?name|given.?name|名字/i,profile.firstName],[/last.?name|family.?name|surname|姓氏/i,profile.lastName],
+    [/(^|\\b)full.?name|candidate.?name|姓名/i,profile.fullName],[/e-?mail|邮箱/i,profile.email],[/phone|mobile|电话|手机/i,profile.phone],
+    [/postal|zip|邮编/i,profile.postalCode],[/country|国家/i,profile.country],[/timezone|时区/i,profile.timezone],
+    [/location|city|address|城市|地址|所在地/i,profile.location],[/linkedin/i,profile.linkedin],[/github/i,profile.github],[/portfolio|website|作品集|个人网站/i,profile.portfolio],
+    [/resume.?url|cv.?url|resume.?link|简历链接/i,profile.resumeUrl],[/headline|professional.?title|职业标题/i,profile.headline],
+    [/current.?company|employer|当前公司/i,profile.currentCompany],[/years?.?(?:of.?)?experience|工作年限|经验年限/i,profile.yearsExperience],
+    [/school|university|college|学校|院校/i,profile.school],[/degree|学历|学位/i,profile.degree],[/major|field.?of.?study|专业/i,profile.major],
+    [/graduat|毕业/i,profile.graduationYear],[/education|教育经历/i,profile.educationSummary],[/work.?experience|employment.?history|工作经历/i,profile.experienceSummary],
+    [/project.?experience|projects?|项目经历|项目经验/i,profile.projectSummary],[/skills?|技术栈|技能/i,profile.skills],
+    [/bio|professional.?summary|about.?you|自我介绍|个人简介/i,profile.bio],[/availability|start.?date|到岗|可用时间/i,profile.availability],
+    [/work.?authorization|authorized.?to.?work|工作许可/i,profile.workAuthorization],[/sponsorship|visa.?sponsor|签证担保/i,profile.sponsorship],
+    [/cover|letter|message|additional|why|note|申请信|补充说明/i,task.applicationLetter],[/rate|salary|compensation|budget|报价|期望薪资/i,task.proposedRate||profile.desiredRate],
   ];
   for(const input of inputs){
-    const hint=[input.name,input.id,input.getAttribute("aria-label"),input.placeholder].filter(Boolean).join(" ");
+    const labelText=[...(input.labels||[])].map(label=>label.innerText).join(" ");
+    const hint=[input.name,input.id,input.getAttribute("aria-label"),input.placeholder,labelText,input.closest("label")?.innerText].filter(Boolean).join(" ");
     const value=values.find(([pattern,candidate])=>candidate&&pattern.test(hint))?.[1]||"";
-    if(!value||input.value||input.tagName==="SELECT"||input.type==="file"||input.type==="checkbox"||input.type==="radio")continue;
+    if(!value||input.type==="file"||input.type==="checkbox"||input.type==="radio")continue;
+    if(input.tagName==="SELECT"){
+      const wanted=String(value).toLowerCase();
+      const option=[...input.options].find(item=>item.value===value||item.text.toLowerCase()===wanted||item.text.toLowerCase().includes(wanted));
+      if(!option||input.value)continue;
+      input.value=option.value;input.dispatchEvent(new Event("change",{bubbles:true}));filledFields++;continue;
+    }
+    if(input.value)continue;
     const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),"value")?.set;
-    setter?.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));filledFields++;
+    setter?.call(input,String(value));input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));filledFields++;
   }
   let uploadedAttachments=0;
   const fileInputs=[...root.querySelectorAll('input[type="file"]')];
@@ -93,18 +108,18 @@ async function runNextTask(headers,tasks){
     await new Promise(resolve=>setTimeout(resolve,5000));
     const injection=await chrome.scripting.executeScript({target:{tabId:tab.id},func:fillApplication,args:[task,headers.Authorization.slice(7)]});
     const result=injection[0]?.result||{filledFields:0,protectedCheckpoint:false};
-    if(result.protectedCheckpoint){await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,result);return;}
+    if(result.protectedCheckpoint){await chrome.storage.local.set({checkpointTask:task});await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,result);return;}
     if(result.provider&&result.provider!=="custom"&&result.authenticated!==false){
       await report(headers,"record_session",task.id,{platformKey:result.provider,accountLabel:"已验证浏览器会话",siteUrl:result.url,suppressTaskLease:true});
     }
     const prepared=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:prepareSubmission}))[0]?.result;
-    if(prepared?.outcome==="protected_checkpoint"){await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,prepared);return;}
+    if(prepared?.outcome==="protected_checkpoint"){await chrome.storage.local.set({checkpointTask:task});await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,prepared);return;}
     if(prepared?.outcome!=="submitted_click"){
       await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,{...result,...prepared,reason:prepared?.outcome||"manual_form_completion_required"});return;
     }
     await new Promise(resolve=>setTimeout(resolve,7000));
     const evidence=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:detectSubmissionEvidence}))[0]?.result;
-    if(evidence?.confirmed){await report(headers,"task_submitted",task.id,{evidenceUrl:evidence.url,evidenceId:evidence.evidenceId,evidenceKind:evidence.evidenceKind,confirmationText:evidence.confirmationText,provider:evidence.provider,capturedAt:evidence.capturedAt});delete taskTabs[task.id];await chrome.storage.local.set({taskTabs});}
+    if(evidence?.confirmed){await chrome.storage.local.remove("checkpointTask");await report(headers,"task_submitted",task.id,{evidenceUrl:evidence.url,evidenceId:evidence.evidenceId,evidenceKind:evidence.evidenceKind,confirmationText:evidence.confirmationText,provider:evidence.provider,capturedAt:evidence.capturedAt});delete taskTabs[task.id];await chrome.storage.local.set({taskTabs});}
     else {await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,{...result,submissionPending:true,url:evidence?.url||prepared.url,reason:"official_confirmation_not_detected"});}
   }catch(error){
     await report(headers,"task_failed",task.id,{error:String(error)}).catch(()=>{});
@@ -121,7 +136,8 @@ async function sync(){
     const heartbeat=await fetch(API,{method:"POST",headers,body:JSON.stringify({action:"heartbeat",agentVersion:chrome.runtime.getManifest().version})});
     const heartbeatData=await heartbeat.json();
     if(!heartbeat.ok)throw new Error(heartbeatData.error||"heartbeat_failed");
-    let currentTasks=heartbeatData.tasks||[];
+    const storedCheckpoint=await chrome.storage.local.get("checkpointTask");
+    let currentTasks=(heartbeatData.tasks&&heartbeatData.tasks.length?heartbeatData.tasks:(storedCheckpoint.checkpointTask?[storedCheckpoint.checkpointTask]:[]));
     const hnCookie=await chrome.cookies.get({url:"https://news.ycombinator.com",name:"user"});
     if(hnCookie&&hnUsername){
       const sessionResponse=await fetch(API,{method:"POST",headers,body:JSON.stringify({
