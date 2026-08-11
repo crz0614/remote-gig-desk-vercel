@@ -720,7 +720,10 @@ export default function Home() {
     setTranslatedTitle("");
     setTranslationStatus(null);
     const source = (gig.fullText || gig.summary).trim();
-    const cacheKey = `gig-zh-v8-complete-${gig.id}`;
+    const isProject = gig.opportunityType === "project";
+    const cacheKey = isProject
+      ? `project-ai-v1-${gig.id}`
+      : `gig-zh-v8-complete-${gig.id}`;
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
@@ -763,6 +766,24 @@ export default function Home() {
           parts: Number(result.parts) || 1,
         };
       };
+      if (isProject) {
+        const response = await fetch("/api/project-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: gig.title, source: gig.source, text: source }),
+        });
+        if (!response.ok) throw new Error("project_summary_failed");
+        const result = await response.json();
+        const bullets = (value: unknown) =>
+          Array.isArray(value) && value.length
+            ? value.map((item) => `• ${String(item)}`).join("\n")
+            : "• 未说明";
+        const text = `项目目标\n${result.overview}\n\n交付内容\n${bullets(result.deliverables)}\n\n技术要求与限制\n${bullets(result.requirements)}\n\n预算与工期\n${result.budgetSchedule || "未说明"}\n\n申请方式\n${result.application || gig.application}`;
+        setTranslation(text);
+        setTranslationStatus({ sourceLength: source.length, parts: 1 });
+        localStorage.setItem(cacheKey, JSON.stringify({ text, complete: true, sourceLength: source.length, parts: 1 }));
+        return;
+      }
       const [titleResult, textResult] = await Promise.all([
         translate(gig.title),
         translate(source),
@@ -1833,10 +1854,10 @@ export default function Home() {
                 <p className="application-note">{selected.deliverable}</p>
               </>
             )}
-            <h3>甲方需求（完整逐条中文翻译）</h3>
+            <h3>{selected.opportunityType === "project" ? "AI 项目需求总结" : "甲方需求（完整逐条中文翻译）"}</h3>
             {translationStatus && (
               <p className="translation-complete">
-                ✓ 已完整翻译当前抓取原文{" "}
+                ✓ {selected.opportunityType === "project" ? "AI 已读取并整理当前抓取原文" : "已完整翻译当前抓取原文"}{" "}
                 {translationStatus.sourceLength.toLocaleString()} 字符 ·{" "}
                 {translationStatus.parts} 段
               </p>
@@ -1844,15 +1865,15 @@ export default function Home() {
             <div className="translation-box">
               {translating ? (
                 <span className="translate-loading">
-                  正在逐段翻译完整岗位原文…
+                  {selected.opportunityType === "project" ? "AI 正在提取真实需求并排除网页导航…" : "正在逐段翻译完整岗位原文…"}
                 </span>
               ) : translation ? (
                 <p>{translation}</p>
               ) : (
                 <div className="translate-failed">
-                  <p>本次完整翻译失败，未展示残缺内容或通用模板。</p>
+                  <p>{selected.opportunityType === "project" ? "本次 AI 总结失败，未展示抓取到的杂乱网页文字。" : "本次完整翻译失败，未展示残缺内容或通用模板。"}</p>
                   <button onClick={() => translateGig(selected)}>
-                    重新翻译
+                    {selected.opportunityType === "project" ? "重新总结" : "重新翻译"}
                   </button>
                 </div>
               )}
@@ -1861,7 +1882,7 @@ export default function Home() {
               className="original-toggle"
               onClick={() => setShowOriginal((v) => !v)}
             >
-              {showOriginal ? "收起英文原文" : "查看英文原文"}
+              {showOriginal ? "收起抓取原文" : "查看抓取原文"}
             </button>
             {showOriginal && (
               <p className="original-text">
