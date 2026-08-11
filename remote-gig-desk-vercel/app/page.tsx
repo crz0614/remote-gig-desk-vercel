@@ -40,18 +40,20 @@ export default function Home(){
   const [syncingMail,setSyncingMail]=useState(false); const [mailNotice,setMailNotice]=useState("");
   const [translation,setTranslation]=useState(""); const [translatedTitle,setTranslatedTitle]=useState(""); const [translating,setTranslating]=useState(false); const [showOriginal,setShowOriginal]=useState(false);
   const mailSyncInFlight=useRef(false); const lastAutomaticMailSync=useRef(0);
+  const cloudSyncInFlight=useRef(false); const lastCloudSync=useRef(0);
 
   const load=async()=>{ setLoading(true);setError("");try{const r=await fetch(`/api/gigs?v=12&t=${Date.now()}`,{cache:'no-store'});if(!r.ok)throw new Error();setData(await r.json());}catch{setError("暂时无法获取项目，请稍后重试");}finally{setLoading(false);} };
   const loadBackend=async()=>{try{const [c,a,r]=await Promise.all([fetch('/api/connections',{cache:'no-store'}),fetch('/api/applications',{cache:'no-store'}),fetch('/api/replies',{cache:'no-store'})]);if(c.ok){const connectionData=await c.json();setConnections(connectionData.channels||[]);setAuthenticatedSites(connectionData.authenticatedSites||[]);setBrowserAgents(connectionData.browserAgents||[]);}if(a.ok){const apps=(await a.json()).applications||[];setApplications(apps);setApplied(apps.map((x:ApplicationRecord)=>x.gigId));}if(r.ok)setReplies((await r.json()).replies||[]);}catch{}};
   const createBrowserAgent=async()=>{setPairing(true);try{const r=await fetch('/api/connections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create_browser_agent',name:'我的 Chrome'})});const result=await r.json();if(!r.ok)throw new Error(result.error||'pairing_failed');setPairingToken(result.token||'');await loadBackend();}catch(error){setMailNotice(`浏览器配对失败：${error instanceof Error?error.message:'请重试'}`);}finally{setPairing(false);}};
   const syncGmail=async(silent=false)=>{if(mailSyncInFlight.current)return;mailSyncInFlight.current=true;if(!silent){setSyncingMail(true);setMailNotice('');}try{const r=await fetch('/api/gmail/sync',{method:'POST',cache:'no-store'});const result=await r.json();if(!r.ok)throw new Error(result.error||'sync_failed');if(!silent)setMailNotice(`已同步 ${result.synced||0} 封申请相关邮件`);await loadBackend();}catch(error){if(!silent)setMailNotice(`同步失败：${error instanceof Error?error.message:'请重试'}`);}finally{mailSyncInFlight.current=false;if(!silent)setSyncingMail(false);}};
   const refreshAll=async()=>{await Promise.all([load(),loadBackend(),syncGmail(true)]);};
+  const runCloudExecutor=async()=>{const now=Date.now();if(cloudSyncInFlight.current||now-lastCloudSync.current<5*60_000)return;cloudSyncInFlight.current=true;lastCloudSync.current=now;try{const r=await fetch('/api/cloud-executor',{method:'POST',cache:'no-store'});if(r.ok){const result=await r.json();if(result.processed)await loadBackend();}}catch{}finally{cloudSyncInFlight.current=false;}};
   useEffect(()=>{
     try{setSaved(JSON.parse(localStorage.getItem('gig-saved')||'[]'));}catch{}
-    load();loadBackend();
+    load();loadBackend();void runCloudExecutor();
     const refreshMail=()=>{const now=Date.now();if(document.visibilityState!=='visible'||now-lastAutomaticMailSync.current<60_000)return;lastAutomaticMailSync.current=now;void syncGmail(true);};
     refreshMail();
-    const automaticRefresh=window.setInterval(()=>{if(document.visibilityState==='visible')void refreshAll();},5*60_000);
+    const automaticRefresh=window.setInterval(()=>{if(document.visibilityState==='visible'){void refreshAll();void runCloudExecutor();}},5*60_000);
     document.addEventListener('visibilitychange',refreshMail);
     window.addEventListener('focus',refreshMail);
     return()=>{window.clearInterval(automaticRefresh);document.removeEventListener('visibilitychange',refreshMail);window.removeEventListener('focus',refreshMail);};

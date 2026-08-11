@@ -19,6 +19,6 @@ test("deduplicates overlapping and rapid automatic Gmail syncs", () => {
 
 test("the global refresh updates every live workbench data source", () => {
   assert.match(source, /const refreshAll=async\(\)=>\{await Promise\.all\(\[load\(\),loadBackend\(\),syncGmail\(true\)\]\)/);
-  assert.match(source, /setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'\)void refreshAll\(\);\},5\*60_000\)/);
+  assert.match(source, /setInterval\(\(\)=>\{if\(document\.visibilityState==='visible'\)\{void refreshAll\(\);void runCloudExecutor\(\);\}\},5\*60_000\)/);
   assert.match(source, /aria-label="刷新全部数据"/);
 });
