@@ -18,6 +18,7 @@ const channels=[
   {id:"proginn",name:"程序员客栈",mode:"browser",capability:"复用已登录会话，填写申请并保存平台提交回执",status:"browser_agent_required"},
   {id:"custom",name:"公司自建表单",mode:"browser",capability:"逐域名分析；验证码或身份验证需要人工处理",status:"manual_checkpoint"},
 ];
+// Proginn retries are limited to the exact missing-target failure.
 const currentBrowserAgentVersion="0.6.0";
 
 export async function GET(){
