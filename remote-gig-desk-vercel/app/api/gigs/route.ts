@@ -1,5 +1,6 @@
 import { getActiveAts, getCompanyCareers, getWellfound, getYC } from "@/lib/expanded-opportunity-sources";
 import { collectPaidProjects } from "@/lib/paid-project-sources";
+import { isContactableOpportunity } from "@/lib/contactability";
 
 type LiveGig = {
   id: string;
@@ -188,10 +189,10 @@ async function getRemotive():Promise<LiveGig[]>{
 
 export async function GET() {
   const [jobs,paidProjects] = await Promise.all([
-    Promise.allSettled([getGitHub(),getHackerNews(),getJobicy(),getRemotive(),getRemoteOK(),getArbeitnow(),getReddit("forhire"),getReddit("jobbit"),getYC(),getWellfound(),getCompanyCareers(),getActiveAts()]),
+    Promise.allSettled([getGitHub(),getHackerNews(),getJobicy(),getRemotive(),getRemoteOK(),getArbeitnow(),getReddit("forhire"),getReddit("jobbit"),getReddit("webdevjobs"),getReddit("remotejs"),getYC(),getWellfound(),getCompanyCareers(),getActiveAts()]),
     collectPaidProjects().catch(()=>({projects:[],sources:[]})),
   ]);
-  const names = ["GitHub","Hacker News","Jobicy","Remotive","Remote OK","Arbeitnow","Reddit r/forhire","Reddit r/jobbit","Y Combinator","Wellfound","公司 Careers","公司 ATS"];
+  const names = ["GitHub","Hacker News","Jobicy","Remotive","Remote OK","Arbeitnow","Reddit r/forhire","Reddit r/jobbit","Reddit r/webdevjobs","Reddit r/remotejs","Y Combinator","Wellfound","公司 Careers","公司 ATS"];
   const sources = jobs.map((result, index) => {
     const count = result.status === "fulfilled" ? result.value.length : 0;
     return { name: names[index], ok: result.status === "fulfilled" && count > 0, count };
@@ -200,7 +201,7 @@ export async function GET() {
     ...jobs.flatMap(result => result.status === "fulfilled" ? result.value.map(gig=>({...gig,opportunityType:"job" as const,market:/V2EX|电鸭|猪八戒/.test(gig.source)?"国内" as const:"海外" as const})) : []),
     ...paidProjects.projects,
   ];
-  const unique = [...new Map(gigs.map(gig => [gig.sourceUrl, gig])).values()]
+  const unique = [...new Map(gigs.filter(isContactableOpportunity).map(gig => [gig.sourceUrl, gig])).values()]
     .sort((a, b) => b.match - a.match || (Date.parse(b.publishedAt)||0) - (Date.parse(a.publishedAt)||0));
   return Response.json({ gigs: unique, sources:[...sources,...paidProjects.sources], fetchedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "CDN-Cache-Control": "no-store" },
