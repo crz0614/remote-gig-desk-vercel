@@ -22,3 +22,10 @@ test("the global refresh updates every live workbench data source", () => {
   assert.match(source, /setInterval\([^]*document\.visibilityState\s*===\s*["']visible["'][^]*refreshAll\(\)[^]*runCloudExecutor\(\)[^]*5\s*\*\s*60_000/);
   assert.match(source, /aria-label="刷新全部数据"/);
 });
+
+test("shows the latest automatic Gmail sync result and failures", () => {
+  assert.match(source, /mailSyncStatus/);
+  assert.match(source, /Gmail 已自动同步/);
+  assert.match(source, /Gmail 自动同步异常/);
+  assert.match(source, /保持打开时每 5 分钟自动同步/);
+});
