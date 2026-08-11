@@ -18,6 +18,10 @@ test("rejects listings without both delivery and payment intent",()=>{
   assert.doesNotMatch(sources,/mock|fixture|placeholder project/i);
   assert.match(sources,/validGitHubBounty/);
   assert.match(sources,/conversationalSuggestion/);
+  assert.match(sources,/getProginnProjects/);
+  assert.match(sources,/getEpwkProjects/);
+  assert.match(sources,/程序员客栈 · 项目研发/);
+  assert.match(sources,/一品威客 · 任务大厅/);
   assert.doesNotMatch(sources,/in:title paid/);
 });
 
