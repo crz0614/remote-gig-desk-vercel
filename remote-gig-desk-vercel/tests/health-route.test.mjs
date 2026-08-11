@@ -10,4 +10,6 @@ test("public health check exposes configuration state but never secrets",()=>{
   assert.match(health,/aiProvider/);
   assert.doesNotMatch(health,/AI_GATEWAY_API_KEY\s*[,}]/);
   assert.doesNotMatch(health,/OPENAI_API_KEY\s*[,}]/);
+  assert.match(health,/browserAgent=\{online:0,current:0,outdated:0\}/);
+  assert.doesNotMatch(health,/owner_email|account_label|token_hash/);
 });
