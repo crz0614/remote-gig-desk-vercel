@@ -14,6 +14,7 @@ const confirmationPatterns: Record<AtsProvider, RegExp> = {
   lever: /thank you for applying|application submitted|we received your application/i,
   ashby: /application submitted|thank you for applying|application received/i,
   workable: /application (?:has been )?submitted|thank you for applying|application received/i,
+  proginn: /申请成功|报名成功|已申请|已报名|等待甲方|申请已提交/i,
   custom: /thank you for applying|application (?:has been |was )?(?:received|submitted)|successfully submitted/i,
 };
 
