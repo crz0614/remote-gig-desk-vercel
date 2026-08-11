@@ -19,7 +19,7 @@ const channels=[
   {id:"custom",name:"公司自建表单",mode:"browser",capability:"逐域名分析；验证码或身份验证需要人工处理",status:"manual_checkpoint"},
 ];
 // Proginn retries are limited to the exact missing-target failure.
-const currentBrowserAgentVersion="0.6.0";
+const currentBrowserAgentVersion="0.7.0";
 
 export async function GET(){
   const user=await getChatGPTUser();
