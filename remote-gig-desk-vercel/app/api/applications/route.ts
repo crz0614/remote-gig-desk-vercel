@@ -58,6 +58,20 @@ export async function GET(){
   await ensureDatabase();
   const sql=db();
 
+  // Repair legacy tasks that were incorrectly marked reusable by the old manual-confirmation flow.
+  await sql`UPDATE applications SET platform_key=CASE
+    WHEN source_url ILIKE ${"%reddit.com%"} THEN ${"reddit"}
+    WHEN source_url ILIKE ${"%news.ycombinator.com%"} THEN ${"hackernews"}
+    WHEN source_url ILIKE ${"%x.com%"} OR source_url ILIKE ${"%twitter.com%"} THEN ${"x"}
+    WHEN source_url ILIKE ${"%threads.net%"} THEN ${"threads"}
+    ELSE platform_key END
+    WHERE owner_email=${user.email} AND platform_key=${"unknown"}`;
+  await sql`UPDATE applications SET status=${"verification_required"},delivery_state=${"verification_required"},last_error=${"需要在真实平台完成登录或验证"},updated_at=${Date.now()}
+    WHERE owner_email=${user.email} AND delivery_state=${"session_reused"} AND COALESCE(receipt_id,${""})=${""}
+      AND platform_key IN (${"unknown"},${"reddit"},${"hackernews"},${"x"},${"threads"})`;
+  await sql`UPDATE platform_sessions SET status=${"verification_required"},verified_at=NULL,updated_at=${Date.now()}
+    WHERE owner_email=${user.email} AND platform_key=${"unknown"} AND status=${"verified"}`;
+
   const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",application_url AS "applicationUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",platform_key AS "platformKey",delivery_state AS "deliveryState",receipt_id AS "receiptId",receipt_url AS "receiptUrl",delivered_at AS "deliveredAt",materials,created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
   const events=await sql`SELECT id,application_id AS "applicationId",event_type AS "eventType",status,message,evidence_id AS "evidenceId",evidence_url AS "evidenceUrl",created_at AS "createdAt" FROM application_events WHERE owner_email=${user.email} ORDER BY created_at ASC`;
   const replies=await sql`SELECT id,application_id AS "applicationId",subject,status,tone,summary,translation,next_action AS "next",gmail_url AS "gmailUrl",received_at AS "receivedAt" FROM email_replies WHERE owner_email=${user.email} AND application_id IS NOT NULL ORDER BY received_at DESC`;
