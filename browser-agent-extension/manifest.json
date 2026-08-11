@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Remote Gig Desk Browser Agent",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Safely reuses this Chrome profile's existing job-platform sessions without uploading passwords or cookies.",
   "permissions": [
     "storage",
@@ -16,7 +16,9 @@
     "https://*.greenhouse.io/*",
     "https://*.lever.co/*",
     "https://*.ashbyhq.com/*",
-    "https://*.workable.com/*"
+    "https://*.workable.com/*",
+    "https://*.proginn.com/*",
+    "https://proginn.com/*"
   ],
   "background": {
     "service_worker": "background.js"
