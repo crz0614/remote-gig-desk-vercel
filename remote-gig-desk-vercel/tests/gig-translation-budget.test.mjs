@@ -9,7 +9,7 @@ test("translates each opportunity from its own title and original description", 
   assert.doesNotMatch(page, /function chineseBrief/);
   assert.match(page, /translate\(gig\.title\)/);
   assert.match(page, /translate\(gig\.fullText\|\|gig\.summary\)/);
-  assert.match(page, /gig-zh-v6-complete-/);
+  assert.match(page, /gig-zh-v7-clean-html-/);
   assert.match(page, /本次逐岗位翻译失败，未使用通用模板替代/);
 });
 
