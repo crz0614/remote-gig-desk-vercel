@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Remote Gig Desk Browser Agent",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Safely reuses this Chrome profile's existing job-platform sessions without uploading passwords or cookies.",
   "permissions": [
     "storage",

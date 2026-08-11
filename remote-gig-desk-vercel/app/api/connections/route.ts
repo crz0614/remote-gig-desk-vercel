@@ -5,15 +5,16 @@ import { browserExecutionContract } from "../../../lib/ats-adapter";
 import { browserTaskState } from "../../../lib/browser-task-state";
 import { applicantProfileForForms } from "../../../lib/applicant-profile";
 import { unseal } from "../../../lib/secret-store";
+import { validateSubmissionEvidence } from "../../../lib/submission-evidence";
 
 const channels=[
   {id:"github",name:"GitHub Issues / Bounties",mode:"direct",capability:"授权后可通过官方 API 发布申请评论",status:"authorization_required"},
   {id:"gmail",name:"Gmail",mode:"direct",capability:"授权后可发送邮件申请并读取回复",status:"authorization_required"},
   {id:"hackernews",name:"Hacker News",mode:"browser",capability:"复用浏览器会话，并把最终申请入口交给浏览器执行器",status:"browser_agent_required"},
-  {id:"greenhouse",name:"Greenhouse",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
-  {id:"lever",name:"Lever",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
-  {id:"ashby",name:"Ashby",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
-  {id:"workable",name:"Workable",mode:"ats",capability:"按最终招聘表单解析字段后提交",status:"adapter_planned"},
+  {id:"greenhouse",name:"Greenhouse",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Greenhouse 正式回执",status:"browser_agent_required"},
+  {id:"lever",name:"Lever",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Lever 正式回执",status:"browser_agent_required"},
+  {id:"ashby",name:"Ashby",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Ashby 正式回执",status:"browser_agent_required"},
+  {id:"workable",name:"Workable",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Workable 正式回执",status:"browser_agent_required"},
   {id:"custom",name:"公司自建表单",mode:"browser",capability:"逐域名分析；验证码或身份验证需要人工处理",status:"manual_checkpoint"},
 ];
 
@@ -75,13 +76,18 @@ export async function POST(request:Request){
     await sql`UPDATE browser_agents SET status=${"online"},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
     if(["task_started","form_inspected","verification_required","task_submitted","task_failed"].includes(String(body.action))){
       const taskId=String(body.taskId||"");
-      const applications=await sql`SELECT id,status,platform_key AS "platformKey",lease_owner AS "leaseOwner" FROM applications WHERE id=${taskId} AND owner_email=${agent.ownerEmail} LIMIT 1`;
+      const applications=await sql`SELECT id,status,platform_key AS "platformKey",application_url AS "applicationUrl",lease_owner AS "leaseOwner" FROM applications WHERE id=${taskId} AND owner_email=${agent.ownerEmail} LIMIT 1`;
       const application=applications[0] as any;
       if(!application)return Response.json({error:"task_not_found"},{status:404,headers:agentCors});
       if(application.leaseOwner&&application.leaseOwner!==agent.id)return Response.json({error:"task_lease_mismatch"},{status:409,headers:agentCors});
       const action=String(body.action);
-      const evidenceUrl=String(body.evidenceUrl||"");
-      const evidenceId=String(body.evidenceId||"");
+      let evidenceUrl=String(body.evidenceUrl||"");
+      let evidenceId=String(body.evidenceId||"");
+      let verifiedEvidence:ReturnType<typeof validateSubmissionEvidence>|null=null;
+      if(action==="task_submitted"){
+        try{verifiedEvidence=validateSubmissionEvidence(body,application.applicationUrl);evidenceUrl=verifiedEvidence.evidenceUrl;evidenceId=verifiedEvidence.evidenceId;}
+        catch(cause){return Response.json({error:cause instanceof Error?cause.message:"invalid_submission_evidence"},{status:400,headers:agentCors});}
+      }
       let next;
       try{next=browserTaskState(action,body);}catch(cause){return Response.json({error:cause instanceof Error?cause.message:"invalid_task_state"},{status:400,headers:agentCors});}
       const {status,deliveryState,message,error}=next;
@@ -90,7 +96,7 @@ export async function POST(request:Request){
         await sql`INSERT INTO platform_sessions(id,owner_email,platform_key,status,updated_at) VALUES(${randomUUID()},${agent.ownerEmail},${application.platformKey},${"verification_required"},${now}) ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verification_required"},updated_at=${now}`;
       }
       const terminal=["form_inspected","verification_required","task_submitted","task_failed"].includes(action);
-      await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},last_error=${error},receipt_id=${evidenceId},receipt_url=${evidenceUrl},delivered_at=${deliveredAt},lease_owner=${terminal?null:agent.id},lease_expires_at=${terminal?null:now+120000},evidence=${JSON.stringify({url:evidenceUrl||null,id:evidenceId||null,reportedBy:agent.id,reportedAt:now})}::jsonb,updated_at=${now} WHERE id=${taskId} AND owner_email=${agent.ownerEmail}`;
+      await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},last_error=${error},receipt_id=${evidenceId},receipt_url=${evidenceUrl},delivered_at=${deliveredAt},lease_owner=${terminal?null:agent.id},lease_expires_at=${terminal?null:now+120000},evidence=${JSON.stringify(verifiedEvidence?{...verifiedEvidence,reportedBy:agent.id,reportedAt:now}:{url:evidenceUrl||null,id:evidenceId||null,reportedBy:agent.id,reportedAt:now})}::jsonb,updated_at=${now} WHERE id=${taskId} AND owner_email=${agent.ownerEmail}`;
       await sql`INSERT INTO application_events(id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES(${randomUUID()},${agent.ownerEmail},${taskId},${action.toUpperCase()},${status},${message},${evidenceId},${evidenceUrl},${now})`;
       return Response.json({ok:true,taskId,status,deliveryState},{headers:agentCors});
     }
@@ -101,6 +107,7 @@ export async function POST(request:Request){
         VALUES(${randomUUID()},${agent.ownerEmail},${platformKey},${"verified"},${now},${now},${String(body.accountLabel||"")},${"browser_extension"},${String(body.siteUrl||"")},${now})
         ON CONFLICT(owner_email,platform_key) DO UPDATE SET status=${"verified"},verified_at=${now},updated_at=${now},account_label=${String(body.accountLabel||"")},auth_method=${"browser_extension"},site_url=${String(body.siteUrl||"")},last_checked_at=${now}`;
       await sql`UPDATE applications SET status=${"queued_for_browser"},delivery_state=${"session_reused"},last_error=${""},updated_at=${now} WHERE owner_email=${agent.ownerEmail} AND platform_key=${platformKey} AND status=${"verification_required"}`;
+      if(body.suppressTaskLease)return Response.json({ok:true,platformKey,status:"verified"},{headers:agentCors});
     }
     const leaseUntil=now+120000;
     const taskRows=await sql`UPDATE applications SET lease_owner=${agent.id},lease_expires_at=${leaseUntil},attempt_count=attempt_count+1,updated_at=${now} WHERE id=(SELECT id FROM applications WHERE owner_email=${agent.ownerEmail} AND status=${"queued_for_browser"} AND (lease_owner IS NULL OR lease_expires_at<${now}) ORDER BY created_at ASC LIMIT 1) RETURNING id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate",attempt_count AS "attemptCount"`;

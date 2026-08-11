@@ -9,7 +9,10 @@ async function report(headers,action,taskId,extra={}){
 
 function fillApplication(task){
   const visible=element=>Boolean(element.offsetWidth||element.offsetHeight||element.getClientRects().length);
-  const inputs=[...document.querySelectorAll("input,textarea")].filter(visible);
+  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
+  const providerRoots={greenhouse:"#application_form,form",lever:"form.application-form,form",ashby:'form,[data-testid*="application"]',workable:'form,[data-ui="application-form"]',custom:"form"};
+  const root=document.querySelector(providerRoots[provider])||document;
+  const inputs=[...root.querySelectorAll("input,textarea,select")].filter(visible);
   const protectedCheckpoint=Boolean(document.querySelector('iframe[src*="captcha" i], [class*="captcha" i], input[autocomplete="one-time-code"], input[type="password"]'));
   let filledFields=0;
   const profile=task.applicantProfile||{};
@@ -22,30 +25,37 @@ function fillApplication(task){
   for(const input of inputs){
     const hint=[input.name,input.id,input.getAttribute("aria-label"),input.placeholder].filter(Boolean).join(" ");
     const value=values.find(([pattern,candidate])=>candidate&&pattern.test(hint))?.[1]||"";
-    if(!value||input.value)continue;
+    if(!value||input.value||input.tagName==="SELECT"||input.type==="file"||input.type==="checkbox"||input.type==="radio")continue;
     const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),"value")?.set;
     setter?.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));filledFields++;
   }
-  return {filledFields,protectedCheckpoint,url:location.href};
+  return {filledFields,protectedCheckpoint,url:location.href,provider};
 }
 
 function prepareSubmission(){
   const visible=element=>Boolean(element.offsetWidth||element.offsetHeight||element.getClientRects().length);
   const required=[...document.querySelectorAll("input[required],textarea[required],select[required]")].filter(visible);
   const missingRequired=required.filter(input=>input.type!=="checkbox"&&!String(input.value||"").trim()).length;
-  const legalCheckpoint=[...document.querySelectorAll('input[type="checkbox"]')].filter(visible).some(input=>input.required&&!input.checked)||/I (?:agree|certify)|terms and conditions|privacy consent/i.test(document.body.innerText);
-  const buttons=[...document.querySelectorAll('button,input[type="submit"]')].filter(visible);
-  const submit=buttons.find(button=>/submit (?:application)?|send application|apply now|complete application/i.test(String(button.innerText||button.value||"")));
+  const legalCheckpoint=[...document.querySelectorAll('input[type="checkbox"]')].filter(visible).some(input=>input.required&&!input.checked);
+  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
+  const providerSubmit={greenhouse:'#submit_app,button[type="submit"],input[type="submit"]',lever:'button[type="submit"],.postings-btn',ashby:'button[type="submit"]',workable:'button[type="submit"],[data-ui="submit-application"]',custom:'button[type="submit"],input[type="submit"]'};
+  const buttons=[...document.querySelectorAll(providerSubmit[provider])].filter(visible);
+  const submit=buttons.find(button=>/submit (?:application)?|send application|apply now|complete application/i.test(String(button.innerText||button.value||"")))||buttons[0];
   if(missingRequired)return {outcome:"missing_required",missingRequired,url:location.href};
   if(legalCheckpoint)return {outcome:"protected_checkpoint",reason:"final_legal_confirmation",url:location.href};
   if(!submit)return {outcome:"submit_not_found",url:location.href};
-  submit.click();return {outcome:"submitted_click",url:location.href};
+  submit.click();return {outcome:"submitted_click",url:location.href,provider};
 }
 
 function detectSubmissionEvidence(){
   const text=document.body.innerText.slice(0,12000);
-  const confirmed=/thank you for applying|application (?:has been |was )?(?:received|submitted)|successfully submitted|we have received your application/i.test(text)||/(?:thank-you|confirmation|application-submitted|application-success)/i.test(location.pathname);
-  return {confirmed,url:location.href,title:document.title};
+  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
+  const patterns={greenhouse:/thank you for applying|application has been submitted|application received/i,lever:/thank you for applying|application submitted|we received your application/i,ashby:/application submitted|thank you for applying|application received/i,workable:/application (?:has been )?submitted|thank you for applying|application received/i,custom:/thank you for applying|application (?:has been |was )?(?:received|submitted)|successfully submitted/i};
+  const match=text.match(patterns[provider]);
+  const confirmed=Boolean(match);
+  const stableUrl=location.href.split("#")[0];
+  const stablePart=btoa(unescape(encodeURIComponent(stableUrl))).replace(/[^a-z0-9]/gi,"").slice(-48);
+  return {confirmed,url:stableUrl,title:document.title,provider,confirmationText:match?.[0]||"",evidenceKind:"official_confirmation_page",evidenceId:confirmed?`${provider}:url:${stablePart}`:"",capturedAt:Date.now()};
 }
 
 async function runNextTask(headers,tasks){
@@ -57,18 +67,27 @@ async function runNextTask(headers,tasks){
   await chrome.storage.local.set({activeTaskId:task.id});
   try{
     await report(headers,"task_started",task.id);
-    const tab=await chrome.tabs.create({url:target,active:false});
+    const stored=await chrome.storage.local.get("taskTabs");
+    const taskTabs=stored.taskTabs||{};
+    let tab=null;
+    if(taskTabs[task.id])tab=await chrome.tabs.get(taskTabs[task.id]).catch(()=>null);
+    if(!tab){tab=await chrome.tabs.create({url:target,active:false});taskTabs[task.id]=tab.id;await chrome.storage.local.set({taskTabs});}
     await new Promise(resolve=>setTimeout(resolve,5000));
     const injection=await chrome.scripting.executeScript({target:{tabId:tab.id},func:fillApplication,args:[task]});
     const result=injection[0]?.result||{filledFields:0,protectedCheckpoint:false};
-    if(result.protectedCheckpoint){await report(headers,"verification_required",task.id,result);return;}
+    if(result.protectedCheckpoint){await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,result);return;}
+    if(result.provider&&result.provider!=="custom"){
+      await report(headers,"record_session",task.id,{platformKey:result.provider,accountLabel:"已验证浏览器会话",siteUrl:result.url,suppressTaskLease:true});
+    }
     const prepared=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:prepareSubmission}))[0]?.result;
-    if(prepared?.outcome==="protected_checkpoint"){await report(headers,"verification_required",task.id,prepared);return;}
-    if(prepared?.outcome!=="submitted_click"){await report(headers,"form_inspected",task.id,{...result,...prepared});return;}
+    if(prepared?.outcome==="protected_checkpoint"){await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,prepared);return;}
+    if(prepared?.outcome!=="submitted_click"){
+      await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,{...result,...prepared,reason:prepared?.outcome||"manual_form_completion_required"});return;
+    }
     await new Promise(resolve=>setTimeout(resolve,7000));
     const evidence=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:detectSubmissionEvidence}))[0]?.result;
-    if(evidence?.confirmed)await report(headers,"task_submitted",task.id,{evidenceUrl:evidence.url,evidenceId:`browser-confirmation:${Date.now()}`});
-    else await report(headers,"form_inspected",task.id,{...result,submissionPending:true,url:evidence?.url||prepared.url});
+    if(evidence?.confirmed){await report(headers,"task_submitted",task.id,{evidenceUrl:evidence.url,evidenceId:evidence.evidenceId,evidenceKind:evidence.evidenceKind,confirmationText:evidence.confirmationText,provider:evidence.provider,capturedAt:evidence.capturedAt});delete taskTabs[task.id];await chrome.storage.local.set({taskTabs});}
+    else {await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,{...result,submissionPending:true,url:evidence?.url||prepared.url,reason:"official_confirmation_not_detected"});}
   }catch(error){
     await report(headers,"task_failed",task.id,{error:String(error)}).catch(()=>{});
   }finally{
@@ -104,6 +123,8 @@ async function sync(){
   }
 }
 chrome.runtime.onInstalled.addListener(()=>{chrome.runtime.openOptionsPage();sync();});
+chrome.runtime.onStartup.addListener(sync);
+chrome.action.onClicked.addListener(()=>chrome.runtime.openOptionsPage());
 chrome.alarms.create("gig-desk-heartbeat",{periodInMinutes:1});
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name==="gig-desk-heartbeat")sync();});
 chrome.storage.onChanged.addListener(changes=>{if(changes.agentToken||changes.hnUsername)sync();});
