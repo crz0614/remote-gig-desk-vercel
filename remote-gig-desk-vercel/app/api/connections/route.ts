@@ -75,7 +75,7 @@ export async function POST(request:Request){
     const agent=rows[0] as any;
     if(!agent)return Response.json({error:"invalid_agent_token"},{status:401,headers:agentCors});
     const now=Date.now();
-    console.info("browser_agent_event",{action:String(body.action||""),agentVersion:String(body.agentVersion||""),hasTask:Boolean(body.taskId)});
+    console.info("browser_agent_event",{action:String(body.action||""),agentVersion:String(body.agentVersion||""),hasTask:Boolean(body.taskId),error:String(body.error||body.reason||"").slice(0,160)});
     await sql`UPDATE browser_agents SET status=${"online"},version=${String(body.agentVersion||"").slice(0,32)},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
     if(["task_started","form_inspected","verification_required","task_submitted","task_failed"].includes(String(body.action))){
       const taskId=String(body.taskId||"");
@@ -113,7 +113,7 @@ export async function POST(request:Request){
       if(body.suppressTaskLease)return Response.json({ok:true,platformKey,status:"verified"},{headers:agentCors});
     }
     const leaseUntil=now+120000;
-    const taskRows=await sql`UPDATE applications SET lease_owner=${agent.id},lease_expires_at=${leaseUntil},attempt_count=attempt_count+1,updated_at=${now} WHERE id=(SELECT id FROM applications WHERE owner_email=${agent.ownerEmail} AND (status=${"queued_for_browser"} OR (status=${"verification_required"} AND platform_key=${"proginn"})) AND (lease_owner IS NULL OR lease_expires_at<${now}) ORDER BY created_at ASC LIMIT 1) RETURNING id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate",attempt_count AS "attemptCount",materials`;
+    const taskRows=await sql`UPDATE applications SET lease_owner=${agent.id},lease_expires_at=${leaseUntil},attempt_count=attempt_count+1,updated_at=${now} WHERE id=(SELECT id FROM applications WHERE owner_email=${agent.ownerEmail} AND (status=${"queued_for_browser"} OR (status IN (${"verification_required"},${"submission_failed"}) AND platform_key=${"proginn"} AND attempt_count<3)) AND (lease_owner IS NULL OR lease_expires_at<${now}) ORDER BY created_at ASC LIMIT 1) RETURNING id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate",attempt_count AS "attemptCount",materials`;
     const [profiles,portfolio]=await Promise.all([
       sql`SELECT profile_ciphertext AS "profileCiphertext" FROM private_profiles WHERE owner_email=${agent.ownerEmail} LIMIT 1`,
       sql`SELECT link FROM portfolio_items WHERE owner_email=${agent.ownerEmail} AND link<>${""} ORDER BY position ASC,updated_at DESC LIMIT 10`
