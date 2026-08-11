@@ -1,5 +1,5 @@
 const ATS_HOSTS = ["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com"];
-const PLATFORM_HOSTS:Record<string,string>={"reddit.com":"reddit","x.com":"x","twitter.com":"x","threads.net":"threads","news.ycombinator.com":"hackernews","github.com":"github"};
+const PLATFORM_HOSTS:Record<string,string>={"reddit.com":"reddit","x.com":"x","twitter.com":"x","threads.net":"threads","news.ycombinator.com":"hackernews","github.com":"github","proginn.com":"proginn"};
 
 function validHttpUrl(value: string) {
   try {
