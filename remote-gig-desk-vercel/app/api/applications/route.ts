@@ -104,7 +104,7 @@ export async function POST(request:Request){
   let status=channel==="github"?"awaiting_github_authorization":"detecting_destination";
   let deliveryError="";
   let destination=finalApplicationUrl||"";
-  const platform=platformKeyForUrl(finalApplicationUrl,platformKey(body.gig.source||""));
+  const platform=platformKeyForUrl(finalApplicationUrl||body.gig.sourceUrl,platformKey(body.gig.source||""));
   let deliveryState="queued";
   let receiptId="";
   let receiptUrl="";
