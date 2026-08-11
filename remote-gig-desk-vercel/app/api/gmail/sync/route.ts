@@ -2,6 +2,7 @@ import { getChatGPTUser } from "../../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../../db";
 import { getGoogleToken } from "../../../../lib/google";
 import { classifyReply, matchApplicationByTitle } from "../../../../lib/email-reply";
+import { analyzeApplicationEmail } from "../../../../lib/email-ai";
 
 type Header = { name: string; value: string };
 type Part = { mimeType?: string; body?: { data?: string }; parts?: Part[] };
@@ -35,8 +36,11 @@ export async function POST() {
   const list = await listResponse.json() as { messages?: { id: string; threadId: string }[] };
   const sql = db();
   const applications = await sql`SELECT id,title,source,destination,application_url AS "applicationUrl" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 200` as { id: string; title: string; source?:string; destination?:string; applicationUrl?:string }[];
+  const existingRows=await sql`SELECT gmail_message_id AS "gmailMessageId" FROM email_replies WHERE owner_email=${user.email}` as {gmailMessageId:string}[];
+  const existing=new Set(existingRows.map(row=>row.gmailMessageId));
   let synced = 0;
   for (const item of list.messages || []) {
+    if(existing.has(item.id))continue;
     const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${item.id}?format=full`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
     if (!response.ok) continue;
     const message = await response.json() as any;
@@ -45,13 +49,17 @@ export async function POST() {
     const sender = header(headers, "From");
     const original = bodyText(message.payload || {}).replace(/\r/g, "").trim().slice(0, 8000);
     if (!original) continue;
-    const result = classifyReply(subject, original);
+    const fallback = classifyReply(subject, original);
     const company = sender.replace(/<[^>]+>/g, "").replace(/"/g, "").trim() || sender;
     const receivedAt = Number(message.internalDate) || Date.now();
     const now = Date.now();
     const applicationId = matchApplicationByTitle(subject, original, applications, sender);
-    const chineseSummary=`${result.summary}\n\n建议操作：${result.next}`;
-    await sql`INSERT INTO email_replies (id,owner_email,gmail_message_id,thread_id,company,subject,sender,received_at,status,tone,summary,translation,original,next_action,gmail_url,updated_at,application_id) VALUES (${crypto.randomUUID()},${user.email},${item.id},${item.threadId},${company},${subject},${sender},${receivedAt},${result.status},${result.tone},${result.summary},${chineseSummary},${original},${result.next},${`https://mail.google.com/mail/u/0/#all/${item.id}`},${now},${applicationId}) ON CONFLICT (owner_email,gmail_message_id) DO UPDATE SET company=EXCLUDED.company,subject=EXCLUDED.subject,sender=EXCLUDED.sender,received_at=EXCLUDED.received_at,status=EXCLUDED.status,tone=EXCLUDED.tone,summary=EXCLUDED.summary,translation=EXCLUDED.translation,original=EXCLUDED.original,next_action=EXCLUDED.next_action,gmail_url=EXCLUDED.gmail_url,updated_at=EXCLUDED.updated_at,application_id=EXCLUDED.application_id`;
+    if(!applicationId)continue;
+    const application=applications.find(item=>item.id===applicationId)!;
+    let ai:null|Awaited<ReturnType<typeof analyzeApplicationEmail>>=null;
+    try{ai=await analyzeApplicationEmail({subject,sender,body:original,applicationTitle:application.title});}catch(error){console.error("email_ai_analysis_failed",error);}
+    const result={...fallback,...(ai?{kind:ai.kind,status:ai.status,summary:ai.summary,translation:ai.translation,next:ai.next}:{translation:`${fallback.summary}\n\n建议操作：${fallback.next}`})};
+    await sql`INSERT INTO email_replies (id,owner_email,gmail_message_id,thread_id,company,subject,sender,received_at,status,tone,summary,translation,original,next_action,gmail_url,updated_at,application_id) VALUES (${crypto.randomUUID()},${user.email},${item.id},${item.threadId},${company},${subject},${sender},${receivedAt},${result.status},${result.tone},${result.summary},${result.translation},${original},${result.next},${`https://mail.google.com/mail/u/0/#all/${item.id}`},${now},${applicationId}) ON CONFLICT (owner_email,gmail_message_id) DO UPDATE SET company=EXCLUDED.company,subject=EXCLUDED.subject,sender=EXCLUDED.sender,received_at=EXCLUDED.received_at,status=EXCLUDED.status,tone=EXCLUDED.tone,summary=EXCLUDED.summary,translation=EXCLUDED.translation,original=EXCLUDED.original,next_action=EXCLUDED.next_action,gmail_url=EXCLUDED.gmail_url,updated_at=EXCLUDED.updated_at,application_id=EXCLUDED.application_id`;
     if(applicationId){
       const gmailUrl=`https://mail.google.com/mail/u/0/#all/${item.id}`;
       await sql`UPDATE applications SET status=${result.applicationStatus},delivery_state=${result.deliveryState},receipt_id=CASE WHEN ${result.kind}=${"receipt"} THEN ${item.id} ELSE receipt_id END,receipt_url=CASE WHEN ${result.kind}=${"receipt"} THEN ${gmailUrl} ELSE receipt_url END,updated_at=${now} WHERE id=${applicationId} AND owner_email=${user.email}`;
