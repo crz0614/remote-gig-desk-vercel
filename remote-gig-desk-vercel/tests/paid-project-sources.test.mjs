@@ -28,6 +28,8 @@ test("rejects listings without both delivery and payment intent",()=>{
   assert.match(sources,/getXProjects/);
   assert.match(sources,/workerAdvertisement/);
   assert.match(sources,/clientRequestIntent/);
+  assert.match(sources,/verifiedIds=\["1v1gve4"\]/);
+  assert.match(sources,/reddit\.com\/comments\/\$\{id\}\.json/);
   assert.doesNotMatch(sources,/in:title paid/);
 });
 
