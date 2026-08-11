@@ -75,6 +75,7 @@ export async function POST(request:Request){
     const agent=rows[0] as any;
     if(!agent)return Response.json({error:"invalid_agent_token"},{status:401,headers:agentCors});
     const now=Date.now();
+    console.info("browser_agent_event",{action:String(body.action||""),agentVersion:String(body.agentVersion||""),hasTask:Boolean(body.taskId)});
     await sql`UPDATE browser_agents SET status=${"online"},version=${String(body.agentVersion||"").slice(0,32)},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
     if(["task_started","form_inspected","verification_required","task_submitted","task_failed"].includes(String(body.action))){
       const taskId=String(body.taskId||"");
