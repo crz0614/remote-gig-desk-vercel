@@ -277,6 +277,11 @@ export default function Home() {
   const [replySending, setReplySending] = useState(false);
   const [syncingMail, setSyncingMail] = useState(false);
   const [mailNotice, setMailNotice] = useState("");
+  const [mailSyncStatus, setMailSyncStatus] = useState<{
+    state: "idle" | "syncing" | "ok" | "error";
+    lastAt?: number;
+    message?: string;
+  }>({ state: "idle" });
   const [translation, setTranslation] = useState("");
   const [translatedTitle, setTranslatedTitle] = useState("");
   const [translationStatus, setTranslationStatus] = useState<{
@@ -353,6 +358,7 @@ export default function Home() {
   const syncGmail = async (silent = false) => {
     if (mailSyncInFlight.current) return;
     mailSyncInFlight.current = true;
+    setMailSyncStatus((current) => ({ ...current, state: "syncing" }));
     if (!silent) {
       setSyncingMail(true);
       setMailNotice("");
@@ -364,13 +370,22 @@ export default function Home() {
       });
       const result = await r.json();
       if (!r.ok) throw new Error(result.error || "sync_failed");
+      setMailSyncStatus({
+        state: "ok",
+        lastAt: Date.now(),
+        message: `同步了 ${result.synced || 0} 封申请相关邮件`,
+      });
       if (!silent) setMailNotice(`已同步 ${result.synced || 0} 封申请相关邮件`);
       await loadBackend();
     } catch (error) {
+      const message = error instanceof Error ? error.message : "请重试";
+      setMailSyncStatus((current) => ({
+        ...current,
+        state: "error",
+        message: `自动同步失败：${message}`,
+      }));
       if (!silent)
-        setMailNotice(
-          `同步失败：${error instanceof Error ? error.message : "请重试"}`,
-        );
+        setMailNotice(`同步失败：${message}`);
     } finally {
       mailSyncInFlight.current = false;
       if (!silent) setSyncingMail(false);
@@ -1327,6 +1342,29 @@ export default function Home() {
           </div>
         ) : activeTab === "回复" ? (
           <div className="reply-list">
+            <div className={`mail-sync-card ${mailSyncStatus.state}`}>
+              <div>
+                <b>
+                  {mailSyncStatus.state === "syncing"
+                    ? "正在自动同步 Gmail…"
+                    : mailSyncStatus.state === "error"
+                      ? "Gmail 自动同步异常"
+                      : mailSyncStatus.lastAt
+                        ? "Gmail 已自动同步"
+                        : "Gmail 自动同步已开启"}
+                </b>
+                <small>
+                  {mailSyncStatus.message ||
+                    "打开工作台、切回网页及保持打开时每 5 分钟自动同步"}
+                  {mailSyncStatus.lastAt
+                    ? ` · 最近 ${new Date(mailSyncStatus.lastAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
+                    : ""}
+                </small>
+              </div>
+              <button disabled={mailSyncStatus.state === "syncing"} onClick={() => void syncGmail()}>
+                立即检查
+              </button>
+            </div>
             {replies.map((reply) => (
               <button
                 className="reply-card"
