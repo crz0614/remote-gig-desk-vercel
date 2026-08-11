@@ -113,7 +113,7 @@ export async function POST(request:Request){
       if(body.suppressTaskLease)return Response.json({ok:true,platformKey,status:"verified"},{headers:agentCors});
     }
     const leaseUntil=now+120000;
-    const taskRows=await sql`UPDATE applications SET lease_owner=${agent.id},lease_expires_at=${leaseUntil},attempt_count=attempt_count+1,updated_at=${now} WHERE id=(SELECT id FROM applications WHERE owner_email=${agent.ownerEmail} AND (status=${"queued_for_browser"} OR (status IN (${"verification_required"},${"submission_failed"}) AND platform_key=${"proginn"} AND attempt_count<5)) AND (lease_owner IS NULL OR lease_expires_at<${now}) ORDER BY created_at ASC LIMIT 1) RETURNING id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate",attempt_count AS "attemptCount",materials`;
+    const taskRows=await sql`UPDATE applications SET lease_owner=${agent.id},lease_expires_at=${leaseUntil},attempt_count=attempt_count+1,updated_at=${now} WHERE id=(SELECT id FROM applications WHERE owner_email=${agent.ownerEmail} AND (status=${"queued_for_browser"} OR (status=${"verification_required"} AND platform_key=${"proginn"})) AND (lease_owner IS NULL OR lease_expires_at<${now}) ORDER BY created_at ASC LIMIT 1) RETURNING id,title,source_url AS "sourceUrl",application_url AS "applicationUrl",destination,platform_key AS "platformKey",status,application_letter AS "applicationLetter",proposed_rate AS "proposedRate",attempt_count AS "attemptCount",materials`;
     const [profiles,portfolio]=await Promise.all([
       sql`SELECT profile_ciphertext AS "profileCiphertext" FROM private_profiles WHERE owner_email=${agent.ownerEmail} LIMIT 1`,
       sql`SELECT link FROM portfolio_items WHERE owner_email=${agent.ownerEmail} AND link<>${""} ORDER BY position ASC,updated_at DESC LIMIT 10`
@@ -121,7 +121,7 @@ export async function POST(request:Request){
     let privateProfile:unknown={};
     try{if((profiles[0] as any)?.profileCiphertext)privateProfile=JSON.parse(await unseal(String((profiles[0] as any).profileCiphertext)));}catch{}
     const applicantProfile=applicantProfileForForms(privateProfile,(portfolio as any[]).map(item=>String(item.link)),agent.ownerEmail);
-    const tasks=(taskRows as any[]).map(task=>({...task,attachments:Array.isArray(task.materials?.attachments)?task.materials.attachments.map((item:any)=>({...item,url:`https://remote-gig-desk-vercel.vercel.app/api/attachments?id=${encodeURIComponent(item.id)}`})):[],applicantProfile,execution:browserExecutionContract(task.applicationUrl||task.destination)}));
+    const tasks=(taskRows as any[]).map(task=>({...task,destination:task.destination||(task.platformKey==="proginn"?task.sourceUrl:""),attachments:Array.isArray(task.materials?.attachments)?task.materials.attachments.map((item:any)=>({...item,url:`https://remote-gig-desk-vercel.vercel.app/api/attachments?id=${encodeURIComponent(item.id)}`})):[],applicantProfile,execution:browserExecutionContract(task.applicationUrl||task.destination||(task.platformKey==="proginn"?task.sourceUrl:""))}));
     console.info("browser_agent_queue",{taskCount:tasks.length,platforms:tasks.map(task=>task.platformKey)});
     return Response.json({ok:true,agentId:agent.id,heartbeatAt:now,tasks},{headers:agentCors});
   }
