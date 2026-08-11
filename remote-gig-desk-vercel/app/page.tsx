@@ -239,6 +239,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("机会");
   const [filter, setFilter] = useState("推荐");
+  const [projectMarket, setProjectMarket] = useState<"全部" | "国内" | "海外">("全部");
   const [query, setQuery] = useState("");
   const [saved, setSaved] = useState<string[]>([]);
   const [applied, setApplied] = useState<string[]>([]);
@@ -675,7 +676,7 @@ export default function Home() {
           : activeTab === "机会"
             ? availableGigs
             : activeTab === "项目单"
-              ? availableProjects
+              ? availableProjects.filter((gig) => projectMarket === "全部" || gig.market === projectMarket)
             : gigs;
     if (query)
       v = v.filter((g) =>
@@ -691,7 +692,7 @@ export default function Home() {
     if (filter === "低竞争") v = v.filter((g) => g.competition === "低");
     if (filter === "高预算") v = v.filter((g) => g.budget !== "预算面议");
     return v;
-  }, [gigs, availableGigs, availableProjects, activeTab, saved, applied, query, filter]);
+  }, [gigs, availableGigs, availableProjects, activeTab, saved, applied, query, filter, projectMarket]);
   const okSources = data?.sources.filter((s) => s.ok).length ?? 0;
   const decode = (value: string) => {
     const box = document.createElement("textarea");
@@ -895,10 +896,17 @@ export default function Home() {
               <span>低竞争</span>
             </div>
             <div>
-              <b>{applications.length}</b>
-              <span>申请任务</span>
+              <b>{activeTab === "项目单" ? availableProjects.filter((g) => g.market === "国内").length : applications.length}</b>
+              <span>{activeTab === "项目单" ? "国内项目" : "申请任务"}</span>
             </div>
           </section>
+          {activeTab === "项目单" && (
+            <section className="market-board" aria-label="国内外项目分区">
+              <button className={projectMarket === "全部" ? "active" : ""} onClick={() => setProjectMarket("全部")}><b>{availableProjects.length}</b><span>全部项目</span></button>
+              <button className={projectMarket === "国内" ? "active" : ""} onClick={() => setProjectMarket("国内")}><b>{availableProjects.filter((g) => g.market === "国内").length}</b><span>国内外包</span></button>
+              <button className={projectMarket === "海外" ? "active" : ""} onClick={() => setProjectMarket("海外")}><b>{availableProjects.filter((g) => g.market === "海外").length}</b><span>海外项目</span></button>
+            </section>
+          )}
           <div className="search-row">
             <div className="searchbox">
               <Icon name="search" />
