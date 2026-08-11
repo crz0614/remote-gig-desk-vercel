@@ -79,10 +79,10 @@ export async function POST(request:Request){
   let channel=deliveryFor(body.gig.source||"");
   const sql=db();
 
-  const existing=await sql`SELECT id,status,delivery_channel AS "deliveryChannel",created_at AS "createdAt" FROM applications WHERE owner_email=${user.email} AND gig_id=${body.gig.id} ORDER BY created_at DESC LIMIT 1`;
+  const existing=await sql`SELECT id,status,delivery_channel AS "deliveryChannel",receipt_id AS "receiptId",receipt_url AS "receiptUrl",created_at AS "createdAt" FROM applications WHERE owner_email=${user.email} AND gig_id=${body.gig.id} ORDER BY created_at DESC LIMIT 1`;
   if(existing.length){
     const row=existing[0] as any;
-    return Response.json({id:row.id,status:row.status,deliveryChannel:row.deliveryChannel,createdAt:row.createdAt,duplicate:true});
+    return Response.json({id:row.id,status:row.status,deliveryChannel:row.deliveryChannel,receiptId:row.receiptId||undefined,receiptUrl:row.receiptUrl||undefined,createdAt:row.createdAt,duplicate:true});
   }
 
   const requestedAttachmentIds=Array.isArray(body.attachmentIds)?body.attachmentIds.map(String).slice(0,5):[];
@@ -182,5 +182,5 @@ export async function POST(request:Request){
       }catch(error){console.error("cloud_executor_autostart_failed",error);}
     });
   }
-  return Response.json({id,status,deliveryChannel:channel,destination:destination||undefined,platformKey:platform,deliveryState,createdAt:now,error:deliveryError||undefined},{status:201});
+  return Response.json({id,status,deliveryChannel:channel,destination:destination||undefined,platformKey:platform,deliveryState,receiptId:receiptId||undefined,receiptUrl:receiptUrl||undefined,createdAt:now,error:deliveryError||undefined},{status:201});
 }
