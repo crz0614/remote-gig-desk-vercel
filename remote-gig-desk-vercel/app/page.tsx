@@ -312,7 +312,6 @@ export default function Home() {
   const lastAutomaticMailSync = useRef(0);
   const cloudSyncInFlight = useRef(false);
   const lastCloudSync = useRef(0);
-  const autoOpenedVerification = useRef(new Set<string>());
 
   const load = async () => {
     setLoading(true);
@@ -464,21 +463,6 @@ export default function Home() {
       window.removeEventListener("focus", refreshMail);
     };
   }, []);
-  useEffect(() => {
-    const pending = applications.find(
-      (app) => app.status === "verification_required" && verificationUrlFor(app),
-    );
-    if (!pending || autoOpenedVerification.current.has(pending.id)) return;
-    const storageKey = `verification-opened-${pending.id}`;
-    if (sessionStorage.getItem(storageKey)) return;
-    autoOpenedVerification.current.add(pending.id);
-    sessionStorage.setItem(storageKey, "1");
-    setMailNotice("正在跳转到平台验证页面；完成后返回工作台，队列会自动继续。");
-    const timer = window.setTimeout(() => {
-      window.location.assign(verificationUrlFor(pending));
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [applications]);
   useEffect(() => {
     const fragment = new URLSearchParams(location.hash.slice(1));
     const encoded = fragment.get("profileImport");
@@ -899,6 +883,8 @@ export default function Home() {
                 ? "已收藏的机会"
                 : activeTab === "进度"
                   ? "接单进度"
+                  : activeTab === "验证"
+                    ? "登录与验证中心"
                   : activeTab === "连接"
                     ? "渠道连接中心"
                     : activeTab === "回复"
@@ -1052,6 +1038,8 @@ export default function Home() {
                 ? `${visible.length} 个已收藏项目`
                 : activeTab === "进度"
                   ? `${applications.length} 个申请任务`
+                  : activeTab === "验证"
+                    ? `${applications.filter((app) => app.status === "verification_required").length} 个平台等待验证`
                   : activeTab === "连接"
                     ? "逐个平台接入"
                     : activeTab === "回复"
@@ -1063,6 +1051,8 @@ export default function Home() {
               ? "每条均可打开原始发布页"
               : activeTab === "项目单"
                 ? "只收录包含明确交付意图和付费意图的真实需求"
+              : activeTab === "验证"
+                ? "只接受浏览器检测到的真实登录会话，不允许手动冒充验证成功"
               : activeTab === "连接"
                 ? "仅显示经过后端验证的真实状态"
                 : activeTab === "回复"
@@ -1076,12 +1066,12 @@ export default function Home() {
           </button>
         )}
       </section>
-      {activeTab === "进度" &&
+      {activeTab === "验证" &&
         applications.some((app) => app.status === "verification_required") && (
           <section className="checkpoint-queue">
-            <b>需要你接管的验证</b>
+            <b>需要登录或验证的平台</b>
             <p>
-              只有验证码、MFA、身份确认、条款勾选或最终法律确认会暂停。完成同一平台的一次验证后，该平台全部任务自动继续。
+              点击任务会直接打开真实登录、验证码或 MFA 页面。完成后不要点击“已验证”；浏览器执行器检测到真实会话才会保存，同平台后续申请自动复用。
             </p>
             {applications
               .filter((app) => app.status === "verification_required")
@@ -1090,19 +1080,26 @@ export default function Home() {
                   key={app.id}
                   onClick={() => {
                     const target = verificationUrlFor(app);
-                    if (target) window.location.assign(target);
-                    else setMailNotice("未识别到可打开的验证地址，请从甲方原始页面进入。");
+                    if (target) window.open(target, "_blank", "noopener,noreferrer");
+                    else setMailNotice("未识别到真实验证地址，系统不会把它标记为已验证。");
                   }}
                 >
                   <span>{app.platformKey || app.source}</span>
                   <strong>{app.title}</strong>
-                  <small>{app.lastError || "立即进入登录、验证码或 MFA 页面"}</small>
+                  <small>{app.lastError || "点击打开真实登录、验证码或 MFA 页面"}</small>
                 </button>
               ))}
           </section>
         )}
       <section className="gig-list">
-        {activeTab === "进度" ? (
+        {activeTab === "验证" ? (
+          applications.some((app) => app.status === "verification_required") ? null : (
+            <div className="empty-card">
+              <h3>当前没有等待登录或验证的平台</h3>
+              <p>真实会话由浏览器执行器确认；已经确认的平台会在“连接”中显示并供后续任务复用。</p>
+            </div>
+          )
+        ) : activeTab === "进度" ? (
           <div className="application-list">
             {applications.length ? (
               applications.map((app) => {
@@ -1359,10 +1356,9 @@ export default function Home() {
                       )}
                       {app.status === "verification_required" && (
                         <button
-                          disabled={queueing}
-                          onClick={() => verifyPlatformAndContinue(app)}
+                          onClick={() => setActiveTab("验证")}
                         >
-                          本平台验证完成，继续全部任务
+                          进入登录/验证中心
                         </button>
                       )}
                       {![
@@ -1767,6 +1763,7 @@ export default function Home() {
           ["机会", "home"],
           ["项目单", "brief"],
           ["进度", "brief"],
+          ["验证", "check"],
           ["连接", "check"],
           ["回复", "mail"],
           ["我的", "user"],
@@ -1781,6 +1778,12 @@ export default function Home() {
             {label === "进度" && applications.length > 0 && (
               <i className="badge">{applications.length}</i>
             )}
+            {label === "验证" &&
+              applications.filter((app) => app.status === "verification_required").length > 0 && (
+                <i className="badge">
+                  {applications.filter((app) => app.status === "verification_required").length}
+                </i>
+              )}
             {label === "回复" &&
               replies.filter((r) => r.tone === "action").length > 0 && (
                 <i className="badge">
