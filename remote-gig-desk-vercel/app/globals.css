@@ -1207,8 +1207,15 @@ svg {
   line-height: 1.55 !important;
 }
 .application-pack .original-mail {
-  max-height: 190px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
+}
+.queue-result a {
+  display: block;
+  margin-top: 7px;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 850;
 }
 .application-pack .detail-source {
   color: #087551;
