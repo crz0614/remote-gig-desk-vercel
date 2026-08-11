@@ -433,6 +433,23 @@ svg {
   margin: 13px 0 7px;
   letter-spacing: -0.015em;
 }
+.project-meta {
+  display: flex;
+  gap: 7px;
+  margin: -1px 0 9px;
+}
+.project-meta b,
+.project-meta span {
+  padding: 4px 7px;
+  border-radius: 6px;
+  background: #e7f5ef;
+  color: #087551;
+  font-size: 9px;
+}
+.project-meta span {
+  background: #eef1f6;
+  color: #536477;
+}
 .summary {
   font-size: 11px;
   color: #6f7b76;
@@ -1292,7 +1309,7 @@ svg {
   opacity: 0.65;
 }
 .bottom-nav button {
-  min-width: 48px;
+  min-width: 44px;
 }
 @keyframes up {
   from {
