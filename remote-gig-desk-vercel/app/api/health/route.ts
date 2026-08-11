@@ -3,7 +3,7 @@ import { db, ensureDatabase } from "../../../db";
 export const dynamic="force-dynamic";
 
 export async function GET(){
-  const aiProvider=process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN?"vercel-ai-gateway":process.env.OPENAI_API_KEY?"openai":"unconfigured";
+  const aiProvider=process.env.GEMINI_API_KEY?"gemini-free-tier":"unconfigured";
   let browserAgent={online:0,current:0,outdated:0};
   try{
     await ensureDatabase();const sql=db();const cutoff=Date.now()-120_000;
