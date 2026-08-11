@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 export function proxy(request: NextRequest) {
   const auth = request.headers.get("authorization");
 
+  if (request.nextUrl.pathname === "/api/health" && request.method === "GET") {
+    return NextResponse.next();
+  }
+
   // Paired Chrome agents use a revocable bearer token on this route.
   // The route itself validates the token hash before accepting a heartbeat.
   if (
