@@ -122,6 +122,7 @@ export async function POST(request:Request){
     try{if((profiles[0] as any)?.profileCiphertext)privateProfile=JSON.parse(await unseal(String((profiles[0] as any).profileCiphertext)));}catch{}
     const applicantProfile=applicantProfileForForms(privateProfile,(portfolio as any[]).map(item=>String(item.link)),agent.ownerEmail);
     const tasks=(taskRows as any[]).map(task=>({...task,attachments:Array.isArray(task.materials?.attachments)?task.materials.attachments.map((item:any)=>({...item,url:`https://remote-gig-desk-vercel.vercel.app/api/attachments?id=${encodeURIComponent(item.id)}`})):[],applicantProfile,execution:browserExecutionContract(task.applicationUrl||task.destination)}));
+    console.info("browser_agent_queue",{taskCount:tasks.length,platforms:tasks.map(task=>task.platformKey)});
     return Response.json({ok:true,agentId:agent.id,heartbeatAt:now,tasks},{headers:agentCors});
   }
   const user=await getChatGPTUser();
