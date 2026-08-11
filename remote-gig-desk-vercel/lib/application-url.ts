@@ -1,4 +1,5 @@
 const ATS_HOSTS = ["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com"];
+const PLATFORM_HOSTS:Record<string,string>={"reddit.com":"reddit","x.com":"x","twitter.com":"x","threads.net":"threads","news.ycombinator.com":"hackernews","github.com":"github"};
 
 function validHttpUrl(value: string) {
   try {
@@ -50,7 +51,9 @@ export function platformKeyForUrl(value: string | null | undefined, fallback: st
   const url = value && validHttpUrl(value);
   if (!url) return fallback;
   const host = ATS_HOSTS.find(item => url.hostname === item || url.hostname.endsWith(`.${item}`));
-  return host?.split(".")[0] || fallback;
+  if (host) return host.split(".")[0];
+  const platform = Object.entries(PLATFORM_HOSTS).find(([domain]) => url.hostname === domain || url.hostname.endsWith(`.${domain}`));
+  return platform?.[1] || fallback;
 }
 
 export function isReusablePlatformSession(session: { status?: string; expiresAt?: string | number | null } | undefined, now = Date.now()) {
