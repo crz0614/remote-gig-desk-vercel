@@ -16,6 +16,9 @@ test("rejects listings without both delivery and payment intent",()=>{
   assert.match(sources,/projectIntent\.test\(text\).*paidIntent\.test\(text\)/);
   assert.match(sources,/closedIntent\.test\(text\)/);
   assert.doesNotMatch(sources,/mock|fixture|placeholder project/i);
+  assert.match(sources,/validGitHubBounty/);
+  assert.match(sources,/conversationalSuggestion/);
+  assert.doesNotMatch(sources,/in:title paid/);
 });
 
 test("shows paid projects in a dedicated workbench area",()=>{
@@ -24,4 +27,6 @@ test("shows paid projects in a dedicated workbench area",()=>{
   assert.match(page,/availableProjects/);
   assert.match(page,/预期交付物/);
   assert.match(page,/国内 \+ 海外 · 按项目付费/);
+  assert.match(page,/国内外包/);
+  assert.match(page,/projectMarket/);
 });
