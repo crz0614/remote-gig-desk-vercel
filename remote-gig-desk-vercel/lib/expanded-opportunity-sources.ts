@@ -53,18 +53,20 @@ function relevant(value: string) {
 }
 
 function iso(value?: string | number) {
-  const date = value ? new Date(value) : new Date();
-  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
 function gig(input: { id: string; title: string; company?: string; source: string; url: string; description?: string; location?: string; date?: string | number; pay?: string }): ExpandedGig {
   const body = text(input.description || "");
   const all = `${input.title} ${input.company || ""} ${input.location || ""} ${body}`;
-  const age = Math.max(0, (Date.now() - new Date(iso(input.date)).getTime()) / 3600000);
+  const publishedAt=iso(input.date);
+  const age = publishedAt ? Math.max(0, (Date.now() - new Date(publishedAt).getTime()) / 3600000) : Number.POSITIVE_INFINITY;
   const detected = skills(all);
   return {
     id: input.id, title: `${text(input.title)}${input.company ? ` · ${text(input.company)}` : ""}`,
-    source: input.source, sourceUrl: input.url, publishedAt: iso(input.date), budget: input.pay || budget(all),
+    source: input.source, sourceUrl: input.url, publishedAt, budget: input.pay || budget(all),
     skills: detected, summary: body.slice(0, 210) || "打开原始职位页查看完整职责、要求和申请方式。",
     fullText: body.slice(0, 30000), remote: input.location ? `远程 · ${text(input.location)}` : "明确远程",
     application: "通过原始职位页进入公司的正式申请入口",

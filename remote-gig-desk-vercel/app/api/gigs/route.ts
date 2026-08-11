@@ -119,8 +119,8 @@ async function getRemoteOK(): Promise<LiveGig[]> {
   }).slice(0, 12).map((j: any): LiveGig => {
     const body = cleanDescription(j.description ?? "");
     const text = `${j.position} ${body} ${(j.tags ?? []).join(" ")}`;
-    const publishedAt = j.date || j.epoch ? new Date(j.date || j.epoch * 1000).toISOString() : new Date().toISOString();
-    const ageHours = (Date.now() - new Date(publishedAt).getTime()) / 3600000;
+    const publishedAt = j.date || j.epoch ? new Date(j.date || j.epoch * 1000).toISOString() : "";
+    const ageHours = publishedAt ? (Date.now() - new Date(publishedAt).getTime()) / 3600000 : Number.POSITIVE_INFINITY;
     const salary = j.salary_min ? `$${Number(j.salary_min).toLocaleString()}–$${Number(j.salary_max || j.salary_min).toLocaleString()}/年` : budgetFor(text);
     return { id: `remoteok-${j.id}`, title: `${clean(j.position)} · ${clean(j.company ?? "甲方")}`, source: "Remote OK · 合同岗位", sourceUrl: j.url || j.apply_url, publishedAt, budget: salary, skills: skillsFor(text), summary: body.slice(0, 210), fullText: body.slice(0,30000), remote: j.location ? `远程 · ${clean(j.location)}` : "明确远程", application: "通过 Remote OK 原始职位页进入甲方申请入口", match: score(text, ageHours), competition: "中" };
   });
@@ -136,8 +136,8 @@ async function getArbeitnow(): Promise<LiveGig[]> {
   }).slice(0, 12).map((j: any): LiveGig => {
     const body = cleanDescription(j.description ?? "");
     const text = `${j.title} ${body} ${(j.tags ?? []).join(" ")}`;
-    const publishedAt = typeof j.created_at === "number" ? new Date(j.created_at * 1000).toISOString() : new Date(j.created_at || Date.now()).toISOString();
-    const ageHours = (Date.now() - new Date(publishedAt).getTime()) / 3600000;
+    const publishedAt = typeof j.created_at === "number" ? new Date(j.created_at * 1000).toISOString() : j.created_at ? new Date(j.created_at).toISOString() : "";
+    const ageHours = publishedAt ? (Date.now() - new Date(publishedAt).getTime()) / 3600000 : Number.POSITIVE_INFINITY;
     return { id: `arbeitnow-${j.slug}`, title: `${clean(j.title)} · ${clean(j.company_name ?? "甲方")}`, source: "Arbeitnow · 远程合同", sourceUrl: j.url, publishedAt, budget: budgetFor(text), skills: skillsFor(text), summary: body.slice(0, 210), fullText: body.slice(0,30000), remote: "明确远程", application: "通过 Arbeitnow 原始职位页进入甲方申请入口", match: score(text, ageHours), competition: "中" };
   });
 }
@@ -190,7 +190,7 @@ export async function GET() {
   });
   const gigs = jobs.flatMap(result => result.status === "fulfilled" ? result.value : []);
   const unique = [...new Map(gigs.map(gig => [gig.sourceUrl, gig])).values()]
-    .sort((a, b) => b.match - a.match || +new Date(b.publishedAt) - +new Date(a.publishedAt));
+    .sort((a, b) => b.match - a.match || (Date.parse(b.publishedAt)||0) - (Date.parse(a.publishedAt)||0));
   return Response.json({ gigs: unique, sources, fetchedAt: new Date().toISOString() }, {
     headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0", "CDN-Cache-Control": "no-store" },
   });
