@@ -122,7 +122,7 @@ export default function Home(){
           <div className="agent-list">{browserAgents.map(agent=><article className="agent-row" key={agent.id}><div><b>{agent.name} · v{agent.version||'未知'}</b><span className={agent.status==='online'?'agent-online':'agent-offline'}>{agent.status==='online'?'在线':'离线'}</span></div>{agent.updateRequired&&<small className="application-error">执行器版本过旧，请下载最新版并在 Chrome 扩展页重新加载。</small>}{agent.lastSeenAt&&<small>最近心跳：{new Date(Number(agent.lastSeenAt)).toLocaleString('zh-CN')}</small>}</article>)}</div>
           <button className="oauth-connect" disabled={pairing} onClick={createBrowserAgent}>{pairing?'正在生成…':'生成 Chrome 配对令牌'}</button>
           {pairingToken&&<div className="pairing-token"><b>一次性配对令牌</b><code>{pairingToken}</code><button onClick={()=>navigator.clipboard?.writeText(pairingToken)}>复制令牌</button><p>安装浏览器执行器后粘贴此令牌，并在本机填写你的 Hacker News 用户名。令牌仅显示这一次。</p></div>}
-          <div className="agent-install"><a href="https://github.com/crz0614/remote-gig-desk-vercel/archive/refs/heads/main.zip" target="_blank" rel="noreferrer">下载浏览器执行器 ZIP ↗</a><span>解压后在 Chrome 扩展程序页面加载 browser-agent-extension 文件夹。</span></div>
+          <div className="agent-install"><a href="https://github.com/crz0614/remote-gig-desk-vercel/raw/refs/heads/main/browser-agent-extension.zip" target="_blank" rel="noreferrer">直接下载最新版浏览器执行器 ZIP ↗</a><span>解压后在 Chrome 扩展程序页面点击“加载已解压的扩展程序”，选择解压后的文件夹。</span></div>
         </section>
         <section className="auth-overview">
           <div className="auth-overview-head"><div><small>平台级认证状态</small><h3>{authenticatedSites.filter(site=>['connected','verified'].includes(site.status)).length} 个网站可复用</h3></div><span>{authenticatedSites.length?'已由后端核验':'尚无认证记录'}</span></div>
