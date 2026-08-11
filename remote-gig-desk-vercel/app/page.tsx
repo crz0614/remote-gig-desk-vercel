@@ -18,6 +18,10 @@ type Gig = {
   fullText: string;
   remote: string;
   application: string;
+  opportunityType?: "job" | "project";
+  market?: "国内" | "海外";
+  projectCategory?: string;
+  deliverable?: string;
 };
 type ApiData = {
   gigs: Gig[];
@@ -650,9 +654,17 @@ export default function Home() {
     }
   };
   const gigs = data?.gigs ?? [];
-  const availableGigs = useMemo(
+  const allAvailableGigs = useMemo(
     () => filterAvailableGigs(gigs, applied),
     [gigs, applied],
+  );
+  const availableGigs = useMemo(
+    () => allAvailableGigs.filter((gig) => gig.opportunityType !== "project"),
+    [allAvailableGigs],
+  );
+  const availableProjects = useMemo(
+    () => allAvailableGigs.filter((gig) => gig.opportunityType === "project"),
+    [allAvailableGigs],
   );
   const visible = useMemo(() => {
     let v =
@@ -662,6 +674,8 @@ export default function Home() {
           ? gigs.filter((g) => applied.includes(g.id))
           : activeTab === "机会"
             ? availableGigs
+            : activeTab === "项目单"
+              ? availableProjects
             : gigs;
     if (query)
       v = v.filter((g) =>
@@ -677,7 +691,7 @@ export default function Home() {
     if (filter === "低竞争") v = v.filter((g) => g.competition === "低");
     if (filter === "高预算") v = v.filter((g) => g.budget !== "预算面议");
     return v;
-  }, [gigs, availableGigs, activeTab, saved, applied, query, filter]);
+  }, [gigs, availableGigs, availableProjects, activeTab, saved, applied, query, filter]);
   const okSources = data?.sources.filter((s) => s.ok).length ?? 0;
   const decode = (value: string) => {
     const box = document.createElement("textarea");
@@ -808,7 +822,9 @@ export default function Home() {
           <p className="eyebrow">实时远程外包</p>
           <h1>
             {activeTab === "机会"
-              ? "找到可以直接联系的项目"
+              ? "找到可以直接申请的岗位"
+              : activeTab === "项目单"
+                ? "按交付付费的真实项目单"
               : activeTab === "收藏"
                 ? "已收藏的机会"
                 : activeTab === "进度"
@@ -832,7 +848,7 @@ export default function Home() {
       {mailNotice && activeTab !== "连接" && (
         <p className="application-note">{mailNotice}</p>
       )}
-      {activeTab === "机会" && (
+      {(activeTab === "机会" || activeTab === "项目单") && (
         <>
           <div className="live-source-bar">
             <b>
@@ -853,28 +869,28 @@ export default function Home() {
             <div className="hero-copy">
               <span className="live-pill">
                 <i />
-                真实项目 · 原始链接
+                {activeTab === "项目单" ? "国内 + 海外 · 按项目付费" : "真实岗位 · 原始链接"}
               </span>
               <h2>
-                当前找到 <strong>{availableGigs.length}</strong> 个<br />
-                未申请机会
+                当前找到 <strong>{activeTab === "项目单" ? availableProjects.length : availableGigs.length}</strong> 个<br />
+                {activeTab === "项目单" ? "可交付项目" : "未申请岗位"}
               </h2>
-              <p>已建立申请任务的岗位会自动移至“进度”</p>
+              <p>{activeTab === "项目单" ? "建站、部署、修复、接口和自动化需求" : "已建立申请任务的岗位会自动移至“进度”"}</p>
             </div>
             <div className="score-ring">
               <span>最高</span>
-              <b>{availableGigs[0]?.match ?? "—"}</b>
+              <b>{(activeTab === "项目单" ? availableProjects[0] : availableGigs[0])?.match ?? "—"}</b>
               <small>匹配度</small>
             </div>
           </section>
           <section className="quick-stats" aria-label="项目概览">
             <div>
-              <b>{availableGigs.length}</b>
-              <span>未申请</span>
+              <b>{activeTab === "项目单" ? availableProjects.length : availableGigs.length}</b>
+              <span>{activeTab === "项目单" ? "项目单" : "未申请"}</span>
             </div>
             <div>
               <b>
-                {availableGigs.filter((g) => g.competition === "低").length}
+                {(activeTab === "项目单" ? availableProjects : availableGigs).filter((g) => g.competition === "低").length}
               </b>
               <span>低竞争</span>
             </div>
@@ -890,7 +906,7 @@ export default function Home() {
                 aria-label="搜索项目"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="搜索 Python、LLM、Java…"
+                placeholder={activeTab === "项目单" ? "搜索建站、部署、Bug、API…" : "搜索 Python、LLM、Java…"}
               />
             </div>
             <button className="tune" aria-label="刷新" onClick={load}>
@@ -953,6 +969,8 @@ export default function Home() {
           <h2>
             {activeTab === "机会"
               ? "真实机会"
+              : activeTab === "项目单"
+                ? `${visible.length} 个付费项目单`
               : activeTab === "收藏"
                 ? `${visible.length} 个已收藏项目`
                 : activeTab === "进度"
@@ -966,6 +984,8 @@ export default function Home() {
           <p>
             {activeTab === "机会"
               ? "每条均可打开原始发布页"
+              : activeTab === "项目单"
+                ? "只收录包含明确交付意图和付费意图的真实需求"
               : activeTab === "连接"
                 ? "仅显示经过后端验证的真实状态"
                 : activeTab === "回复"
@@ -973,7 +993,7 @@ export default function Home() {
                   : "申请记录已保存到服务器"}
           </p>
         </div>
-        {activeTab === "机会" && (
+        {(activeTab === "机会" || activeTab === "项目单") && (
           <button onClick={load}>
             刷新 <Icon name="arrow" />
           </button>
@@ -1566,7 +1586,7 @@ export default function Home() {
         ) : visible.length ? (
           visible.map((gig, index) => (
             <article
-              className={`gig-card ${index === 0 && activeTab === "机会" ? "featured" : ""}`}
+              className={`gig-card ${index === 0 && (activeTab === "机会" || activeTab === "项目单") ? "featured" : ""}`}
               key={gig.id}
             >
               <div className="card-top">
@@ -1593,6 +1613,11 @@ export default function Home() {
                 </button>
               </div>
               <h3>{gig.title}</h3>
+              {gig.opportunityType === "project" && (
+                <div className="project-meta">
+                  <b>{gig.market}</b><span>{gig.projectCategory}</span>
+                </div>
+              )}
               <p className="summary">{gig.summary}</p>
               <div className="tags">
                 {(gig.skills.length ? gig.skills : ["其他开发"]).map((s) => (
@@ -1643,6 +1668,7 @@ export default function Home() {
       <nav className="bottom-nav" aria-label="主导航">
         {[
           ["机会", "home"],
+          ["项目单", "brief"],
           ["进度", "brief"],
           ["连接", "check"],
           ["回复", "mail"],
@@ -1755,7 +1781,13 @@ export default function Home() {
                 <b>{selected.remote}</b>
               </div>
             </div>
-            <h3>甲方需求（完整逐岗位中文翻译）</h3>
+            {selected.opportunityType === "project" && selected.deliverable && (
+              <>
+                <h3>预期交付物</h3>
+                <p className="application-note">{selected.deliverable}</p>
+              </>
+            )}
+            <h3>甲方需求（完整逐条中文翻译）</h3>
             {translationStatus && (
               <p className="translation-complete">
                 ✓ 已完整翻译当前抓取原文{" "}
