@@ -1,10 +1,11 @@
-export type AtsProvider = "greenhouse" | "lever" | "ashby" | "workable" | "custom";
+export type AtsProvider = "greenhouse" | "lever" | "ashby" | "workable" | "proginn" | "custom";
 
 const HOSTS: Array<[AtsProvider, RegExp]> = [
   ["greenhouse", /(^|\.)greenhouse\.io$/i],
   ["lever", /(^|\.)lever\.co$/i],
   ["ashby", /(^|\.)ashbyhq\.com$/i],
   ["workable", /(^|\.)workable\.com$/i],
+  ["proginn", /(^|\.)proginn\.com$/i],
 ];
 
 export function atsProviderForUrl(value: string | null | undefined): AtsProvider {
