@@ -4,6 +4,9 @@ import { unseal } from "../../../lib/secret-store";
 import { getGoogleToken } from "../../../lib/google";
 import { applicationStateForSession, detectFinalApplicationUrl, platformKeyForUrl } from "../../../lib/application-url";
 import { buildResumeDocx } from "../../../lib/resume-docx";
+import { after } from "next/server";
+
+export const maxDuration=300;
 
 function platformKey(source:string){return source.toLowerCase().replace(/[^a-z0-9]+/g,"")||"unknown";}
 
@@ -169,5 +172,15 @@ export async function POST(request:Request){
     sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${id},${deliveryState==="session_reused"?"SESSION_REUSED":deliveryState==="verification_required"?"VERIFICATION_REQUIRED":"QUEUED"},${status},${deliveryState==="platform_accepted"?"平台接口已确认接收申请":deliveryState==="session_reused"?"已复用平台会话，任务进入浏览器执行队列":deliveryState==="verification_required"?"平台队列等待一次登录或验证":deliveryError?"投递失败："+deliveryError:"任务已建立，等待下一步"},${receiptId},${receiptUrl},${now})`,
     sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_processed"},${id},${deliveryError||status},${now})`,
   ]);
+  if(status==="queued_for_browser"&&["greenhouse","lever","ashby","workable"].includes(platform)){
+    const authorization=request.headers.get("authorization")||"";
+    const executorUrl=new URL("/api/cloud-executor",request.url);
+    after(async()=>{
+      try{
+        const response=await fetch(executorUrl,{method:"POST",headers:authorization?{authorization}:undefined,cache:"no-store"});
+        if(!response.ok)console.error("cloud_executor_autostart_failed",response.status);
+      }catch(error){console.error("cloud_executor_autostart_failed",error);}
+    });
+  }
   return Response.json({id,status,deliveryChannel:channel,destination:destination||undefined,platformKey:platform,deliveryState,createdAt:now,error:deliveryError||undefined},{status:201});
 }
