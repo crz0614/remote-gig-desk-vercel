@@ -13,11 +13,13 @@ test("translates each opportunity from its own title and original description", 
   assert.match(page, /本次逐岗位翻译失败，未使用通用模板替代/);
 });
 
-test("keeps full source text and uses complete AI translation", () => {
+test("keeps full source text and completes free translation without billing credentials", () => {
   const translationRoute = fs.readFileSync(new URL("../app/api/translate/route.ts", import.meta.url), "utf8");
   assert.doesNotMatch(gigsRoute, /fullText:\s*body\.slice\(0,\s*1400\)/);
   assert.match(gigsRoute, /fullText:\s*body\.slice\(0,\s*30000\)/);
-  assert.match(translationRoute, /Translate every sentence faithfully and completely/);
+  assert.match(translationRoute, /translate\.googleapis\.com/);
+  assert.match(translationRoute, /free-machine-translation/);
+  assert.doesNotMatch(translationRoute, /AI_GATEWAY_API_KEY|OPENAI_API_KEY/);
   assert.match(translationRoute, /translated\.length===parts\.length/);
   assert.doesNotMatch(translationRoute, /mymemory\.translated\.net/);
 });
