@@ -220,6 +220,23 @@ const Icon = ({ name }: { name: string }) => {
   );
 };
 
+function verificationUrlFor(app: ApplicationRecord) {
+  const raw = app.applicationUrl || app.destination || app.sourceUrl;
+  if (!raw) return "";
+  try {
+    const target = new URL(raw);
+    if (!["http:", "https:"].includes(target.protocol)) return "";
+    const key = String(app.platformKey || app.source || "").toLowerCase();
+    if (key.includes("reddit") && !/reddit\.com\/login/i.test(target.href))
+      return "https://www.reddit.com/login/?dest=" + encodeURIComponent(target.pathname + target.search);
+    if (key.includes("hackernews") && !/news\.ycombinator\.com\/login/i.test(target.href))
+      return "https://news.ycombinator.com/login?goto=" + encodeURIComponent(target.pathname + target.search);
+    return target.href;
+  } catch {
+    return "";
+  }
+}
+
 function age(iso: string) {
   const timestamp = Date.parse(iso);
   if (!Number.isFinite(timestamp)) return "发布时间未知";
@@ -295,6 +312,7 @@ export default function Home() {
   const lastAutomaticMailSync = useRef(0);
   const cloudSyncInFlight = useRef(false);
   const lastCloudSync = useRef(0);
+  const autoOpenedVerification = useRef(new Set<string>());
 
   const load = async () => {
     setLoading(true);
@@ -446,6 +464,21 @@ export default function Home() {
       window.removeEventListener("focus", refreshMail);
     };
   }, []);
+  useEffect(() => {
+    const pending = applications.find(
+      (app) => app.status === "verification_required" && verificationUrlFor(app),
+    );
+    if (!pending || autoOpenedVerification.current.has(pending.id)) return;
+    const storageKey = `verification-opened-${pending.id}`;
+    if (sessionStorage.getItem(storageKey)) return;
+    autoOpenedVerification.current.add(pending.id);
+    sessionStorage.setItem(storageKey, "1");
+    setMailNotice("正在跳转到平台验证页面；完成后返回工作台，队列会自动继续。");
+    const timer = window.setTimeout(() => {
+      window.location.assign(verificationUrlFor(pending));
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [applications]);
   useEffect(() => {
     const fragment = new URLSearchParams(location.hash.slice(1));
     const encoded = fragment.get("profileImport");
@@ -1055,18 +1088,15 @@ export default function Home() {
               .map((app) => (
                 <button
                   key={app.id}
-                  onClick={() =>
-                    app.applicationUrl &&
-                    window.open(
-                      app.applicationUrl,
-                      "_blank",
-                      "noopener,noreferrer",
-                    )
-                  }
+                  onClick={() => {
+                    const target = verificationUrlFor(app);
+                    if (target) window.location.assign(target);
+                    else setMailNotice("未识别到可打开的验证地址，请从甲方原始页面进入。");
+                  }}
                 >
                   <span>{app.platformKey || app.source}</span>
                   <strong>{app.title}</strong>
-                  <small>{app.lastError || "打开当前申请页面完成验证"}</small>
+                  <small>{app.lastError || "立即进入登录、验证码或 MFA 页面"}</small>
                 </button>
               ))}
           </section>
