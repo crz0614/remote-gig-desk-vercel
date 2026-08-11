@@ -117,7 +117,7 @@ export async function POST(request:Request){
     ]);
     let privateProfile:unknown={};
     try{if((profiles[0] as any)?.profileCiphertext)privateProfile=JSON.parse(await unseal(String((profiles[0] as any).profileCiphertext)));}catch{}
-    const applicantProfile=applicantProfileForForms(privateProfile,(portfolio as any[]).map(item=>String(item.link)));
+    const applicantProfile=applicantProfileForForms(privateProfile,(portfolio as any[]).map(item=>String(item.link)),agent.ownerEmail);
     const tasks=(taskRows as any[]).map(task=>({...task,applicantProfile,execution:browserExecutionContract(task.applicationUrl||task.destination)}));
     return Response.json({ok:true,agentId:agent.id,heartbeatAt:now,tasks},{headers:agentCors});
   }

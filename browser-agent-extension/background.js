@@ -20,6 +20,7 @@ function fillApplication(task){
     [/first.?name|given.?name/i,profile.firstName],[/last.?name|family.?name|surname/i,profile.lastName],
     [/(^|\b)full.?name|candidate.?name/i,profile.fullName],[/e-?mail/i,profile.email],[/phone|mobile/i,profile.phone],
     [/location|city|address/i,profile.location],[/linkedin/i,profile.linkedin],[/github/i,profile.github],[/portfolio|website/i,profile.portfolio],
+    [/resume.?url|cv.?url|resume.?link/i,profile.resumeUrl],
     [/cover|letter|message|additional|why|note/i,task.applicationLetter],[/rate|salary|compensation|budget/i,task.proposedRate],
   ];
   for(const input of inputs){
@@ -35,13 +36,15 @@ function fillApplication(task){
 function prepareSubmission(){
   const visible=element=>Boolean(element.offsetWidth||element.offsetHeight||element.getClientRects().length);
   const required=[...document.querySelectorAll("input[required],textarea[required],select[required]")].filter(visible);
-  const missingRequired=required.filter(input=>input.type!=="checkbox"&&!String(input.value||"").trim()).length;
+  const missing=required.filter(input=>input.type!=="checkbox"&&!String(input.value||"").trim());
+  const missingRequired=missing.length;
+  const missingKinds=[...new Set(missing.map(input=>input.type==="file"?"attachment":input.tagName.toLowerCase()))];
   const legalCheckpoint=[...document.querySelectorAll('input[type="checkbox"]')].filter(visible).some(input=>input.required&&!input.checked);
   const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
   const providerSubmit={greenhouse:'#submit_app,button[type="submit"],input[type="submit"]',lever:'button[type="submit"],.postings-btn',ashby:'button[type="submit"]',workable:'button[type="submit"],[data-ui="submit-application"]',custom:'button[type="submit"],input[type="submit"]'};
   const buttons=[...document.querySelectorAll(providerSubmit[provider])].filter(visible);
   const submit=buttons.find(button=>/submit (?:application)?|send application|apply now|complete application/i.test(String(button.innerText||button.value||"")))||buttons[0];
-  if(missingRequired)return {outcome:"missing_required",missingRequired,url:location.href};
+  if(missingRequired)return {outcome:"missing_required",missingRequired,missingKinds,url:location.href};
   if(legalCheckpoint)return {outcome:"protected_checkpoint",reason:"final_legal_confirmation",url:location.href};
   if(!submit)return {outcome:"submit_not_found",url:location.href};
   submit.click();return {outcome:"submitted_click",url:location.href,provider};
