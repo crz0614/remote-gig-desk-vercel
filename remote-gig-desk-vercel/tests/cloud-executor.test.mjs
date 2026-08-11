@@ -4,6 +4,7 @@ import test from "node:test";
 
 const route=fs.readFileSync(new URL("../app/api/cloud-executor/route.ts",import.meta.url),"utf8");
 const page=fs.readFileSync(new URL("../app/page.tsx",import.meta.url),"utf8");
+const applications=fs.readFileSync(new URL("../app/api/applications/route.ts",import.meta.url),"utf8");
 
 test("cloud browser handles only known public ATS tasks and preserves evidence gating",()=>{
   assert.match(route,/platform_key IN/);
@@ -23,4 +24,10 @@ test("workbench starts at most one cloud task per five minute window",()=>{
   assert.match(page,/lastCloudSync/);
   assert.match(page,/5\*60_000/);
   assert.match(page,/cloudSyncInFlight/);
+});
+
+test("new public ATS applications autostart without an open workbench page",()=>{
+  assert.match(applications,/after\(async\(\)=>/);
+  assert.match(applications,/new URL\("\/api\/cloud-executor",request\.url\)/);
+  assert.match(applications,/status==="queued_for_browser"/);
 });
