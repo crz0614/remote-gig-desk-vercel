@@ -103,7 +103,7 @@ async function sync(){
   if(!agentToken)return;
   const headers={"Content-Type":"application/json","Authorization":"Bearer "+agentToken};
   try{
-    const heartbeat=await fetch(API,{method:"POST",headers,body:JSON.stringify({action:"heartbeat"})});
+    const heartbeat=await fetch(API,{method:"POST",headers,body:JSON.stringify({action:"heartbeat",agentVersion:chrome.runtime.getManifest().version})});
     const heartbeatData=await heartbeat.json();
     if(!heartbeat.ok)throw new Error(heartbeatData.error||"heartbeat_failed");
     let currentTasks=heartbeatData.tasks||[];

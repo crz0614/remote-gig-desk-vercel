@@ -17,6 +17,7 @@ const channels=[
   {id:"workable",name:"Workable",mode:"ats",capability:"浏览器适配器可识别、填写并核验 Workable 正式回执",status:"browser_agent_required"},
   {id:"custom",name:"公司自建表单",mode:"browser",capability:"逐域名分析；验证码或身份验证需要人工处理",status:"manual_checkpoint"},
 ];
+const currentBrowserAgentVersion="0.4.0";
 
 export async function GET(){
   const user=await getChatGPTUser();
@@ -53,9 +54,9 @@ export async function GET(){
     const existing=authenticated.get(session.platformKey);
     if(!existing||existing.status!=="connected")authenticated.set(session.platformKey,item);
   }
-  const agents=await sql`SELECT id,name,status,last_seen_at AS "lastSeenAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM browser_agents WHERE owner_email=${user.email} ORDER BY updated_at DESC`;
-  const browserAgents=(agents as any[]).map(agent=>({...agent,status:agent.lastSeenAt&&Date.now()-Number(agent.lastSeenAt)<120000?"online":"offline"}));
-  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents});
+  const agents=await sql`SELECT id,name,status,version,last_seen_at AS "lastSeenAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM browser_agents WHERE owner_email=${user.email} ORDER BY updated_at DESC`;
+  const browserAgents=(agents as any[]).map(agent=>({...agent,status:agent.lastSeenAt&&Date.now()-Number(agent.lastSeenAt)<120000?"online":"offline",updateRequired:agent.version!==currentBrowserAgentVersion}));
+  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents,currentBrowserAgentVersion});
 }
 
 
@@ -73,7 +74,7 @@ export async function POST(request:Request){
     const agent=rows[0] as any;
     if(!agent)return Response.json({error:"invalid_agent_token"},{status:401,headers:agentCors});
     const now=Date.now();
-    await sql`UPDATE browser_agents SET status=${"online"},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
+    await sql`UPDATE browser_agents SET status=${"online"},version=${String(body.agentVersion||"").slice(0,32)},last_seen_at=${now},updated_at=${now} WHERE id=${agent.id}`;
     if(["task_started","form_inspected","verification_required","task_submitted","task_failed"].includes(String(body.action))){
       const taskId=String(body.taskId||"");
       const applications=await sql`SELECT id,status,platform_key AS "platformKey",application_url AS "applicationUrl",lease_owner AS "leaseOwner" FROM applications WHERE id=${taskId} AND owner_email=${agent.ownerEmail} LIMIT 1`;

@@ -67,6 +67,7 @@ export function ensureDatabase() {
         last_seen_at BIGINT, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL
       )`,
       sql`CREATE INDEX IF NOT EXISTS browser_agents_owner_idx ON browser_agents(owner_email, updated_at DESC)`,
+      sql`ALTER TABLE browser_agents ADD COLUMN IF NOT EXISTS version TEXT`,
       sql`CREATE TABLE IF NOT EXISTS oauth_states (
         state TEXT PRIMARY KEY, owner_email TEXT NOT NULL, provider TEXT NOT NULL,
         verifier TEXT, expires_at BIGINT NOT NULL
