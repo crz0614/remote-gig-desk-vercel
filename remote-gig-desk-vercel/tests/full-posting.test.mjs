@@ -4,6 +4,7 @@ import test from "node:test";
 
 const sources=fs.readFileSync(new URL("../lib/expanded-opportunity-sources.ts",import.meta.url),"utf8");
 const page=fs.readFileSync(new URL("../app/page.tsx",import.meta.url),"utf8");
+const gigs=fs.readFileSync(new URL("../app/api/gigs/route.ts",import.meta.url),"utf8");
 
 test("YC, Wellfound and Careers hydrate each detail page before application generation",()=>{
   assert.match(sources,/async function hydrateLinks/);
@@ -15,4 +16,10 @@ test("application review exposes employer summary and requirement evidence mappi
   assert.match(page,/甲方需求完整总结/);
   assert.match(page,/甲方要求与我的对口证据/);
   assert.match(page,/match\.evidence/);
+  assert.match(page,/applicationError/);
+});
+
+test("escaped source HTML is decoded before tags are removed",()=>{
+  assert.match(gigs,/decodeEntities\(decodeEntities\(value\)\)/);
+  assert.match(gigs,/replace\(\/&lt;\/gi,"<"\)/);
 });
