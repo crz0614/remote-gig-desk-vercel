@@ -9,8 +9,8 @@ async function report(headers,action,taskId,extra={}){
 
 async function fillApplication(task,agentToken){
   const visible=element=>Boolean(element.offsetWidth||element.offsetHeight||element.getClientRects().length);
-  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
-  const providerRoots={greenhouse:"#application_form,form",lever:"form.application-form,form",ashby:'form,[data-testid*="application"]',workable:'form,[data-ui="application-form"]',custom:"form"};
+  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":/(^|\.)proginn\.com$/i.test(location.hostname)?"proginn":"custom";
+  const providerRoots={greenhouse:"#application_form,form",lever:"form.application-form,form",ashby:'form,[data-testid*="application"]',workable:'form,[data-ui="application-form"]',proginn:"form,.apply-form,.signup-form",custom:"form"};
   const root=document.querySelector(providerRoots[provider])||document;
   const inputs=[...root.querySelectorAll("input,textarea,select")].filter(visible);
   const protectedCheckpoint=Boolean(document.querySelector('iframe[src*="captcha" i], [class*="captcha" i], input[autocomplete="one-time-code"], input[type="password"]'));
@@ -44,7 +44,8 @@ async function fillApplication(task,agentToken){
     const transfer=new DataTransfer();transfer.items.add(file);target.files=transfer.files;
     target.dispatchEvent(new Event("input",{bubbles:true}));target.dispatchEvent(new Event("change",{bubbles:true}));uploadedAttachments++;
   }
-  return {filledFields,uploadedAttachments,protectedCheckpoint,url:location.href,provider};
+  const pageText=document.body.innerText.slice(0,5000);const authenticated=provider!=="proginn"||(!/登录|注册/.test(pageText)||/我的|消息|退出|UID/.test(pageText));
+  return {filledFields,uploadedAttachments,protectedCheckpoint,url:location.href,provider,authenticated};
 }
 
 function prepareSubmission(){
@@ -54,10 +55,10 @@ function prepareSubmission(){
   const missingRequired=missing.length;
   const missingKinds=[...new Set(missing.map(input=>input.type==="file"?"attachment":input.tagName.toLowerCase()))];
   const legalCheckpoint=[...document.querySelectorAll('input[type="checkbox"]')].filter(visible).some(input=>input.required&&!input.checked);
-  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
-  const providerSubmit={greenhouse:'#submit_app,button[type="submit"],input[type="submit"]',lever:'button[type="submit"],.postings-btn',ashby:'button[type="submit"]',workable:'button[type="submit"],[data-ui="submit-application"]',custom:'button[type="submit"],input[type="submit"]'};
+  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":/(^|\.)proginn\.com$/i.test(location.hostname)?"proginn":"custom";
+  const providerSubmit={greenhouse:'#submit_app,button[type="submit"],input[type="submit"]',lever:'button[type="submit"],.postings-btn',ashby:'button[type="submit"]',workable:'button[type="submit"],[data-ui="submit-application"]',proginn:'button[type="submit"],a[class*="apply"],button[class*="apply"]',custom:'button[type="submit"],input[type="submit"]'};
   const buttons=[...document.querySelectorAll(providerSubmit[provider])].filter(visible);
-  const submit=buttons.find(button=>/submit (?:application)?|send application|apply now|complete application/i.test(String(button.innerText||button.value||"")))||buttons[0];
+  const submit=buttons.find(button=>/submit (?:application)?|send application|apply now|complete application|立即申请|申请项目|报名|抢单|确认申请/i.test(String(button.innerText||button.value||"")))||buttons[0];
   if(missingRequired)return {outcome:"missing_required",missingRequired,missingKinds,url:location.href};
   if(legalCheckpoint)return {outcome:"protected_checkpoint",reason:"final_legal_confirmation",url:location.href};
   if(!submit)return {outcome:"submit_not_found",url:location.href};
@@ -66,8 +67,8 @@ function prepareSubmission(){
 
 function detectSubmissionEvidence(){
   const text=document.body.innerText.slice(0,12000);
-  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
-  const patterns={greenhouse:/thank you for applying|application has been submitted|application received/i,lever:/thank you for applying|application submitted|we received your application/i,ashby:/application submitted|thank you for applying|application received/i,workable:/application (?:has been )?submitted|thank you for applying|application received/i,custom:/thank you for applying|application (?:has been |was )?(?:received|submitted)|successfully submitted/i};
+  const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":/(^|\.)proginn\.com$/i.test(location.hostname)?"proginn":"custom";
+  const patterns={greenhouse:/thank you for applying|application has been submitted|application received/i,lever:/thank you for applying|application submitted|we received your application/i,ashby:/application submitted|thank you for applying|application received/i,workable:/application (?:has been )?submitted|thank you for applying|application received/i,proginn:/申请成功|报名成功|已申请|已报名|等待甲方|申请已提交/i,custom:/thank you for applying|application (?:has been |was )?(?:received|submitted)|successfully submitted/i};
   const match=text.match(patterns[provider]);
   const confirmed=Boolean(match);
   const stableUrl=location.href.split("#")[0];
@@ -93,7 +94,7 @@ async function runNextTask(headers,tasks){
     const injection=await chrome.scripting.executeScript({target:{tabId:tab.id},func:fillApplication,args:[task,headers.Authorization.slice(7)]});
     const result=injection[0]?.result||{filledFields:0,protectedCheckpoint:false};
     if(result.protectedCheckpoint){await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,result);return;}
-    if(result.provider&&result.provider!=="custom"){
+    if(result.provider&&result.provider!=="custom"&&result.authenticated!==false){
       await report(headers,"record_session",task.id,{platformKey:result.provider,accountLabel:"已验证浏览器会话",siteUrl:result.url,suppressTaskLease:true});
     }
     const prepared=(await chrome.scripting.executeScript({target:{tabId:tab.id},func:prepareSubmission}))[0]?.result;
