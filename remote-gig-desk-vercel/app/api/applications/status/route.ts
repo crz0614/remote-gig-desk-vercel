@@ -23,11 +23,10 @@ export async function POST(request: Request) {
     affectedIds = (affected as any[]).map(row => String(row.id));
     message = "该平台队列已统一暂停，只需完成一次登录或验证码";
   } else if (body.action === "verify_platform") {
-    status = "queued_for_browser";
-    await sql`INSERT INTO platform_sessions (id,owner_email,platform_key,status,verified_at,updated_at) VALUES (${crypto.randomUUID()},${user.email},${platformKey},${"verified"},${now},${now}) ON CONFLICT (owner_email,platform_key) DO UPDATE SET status=EXCLUDED.status,verified_at=EXCLUDED.verified_at,updated_at=EXCLUDED.updated_at`;
-    const affected = await sql`UPDATE applications SET status=${status},delivery_state=${"session_reused"},last_error=${""},updated_at=${now} WHERE owner_email=${user.email} AND platform_key=${platformKey} AND status=${"verification_required"} RETURNING id`;
-    affectedIds = (affected as any[]).map(row => String(row.id));
-    message = "平台验证已记录，同平台任务无需再次验证";
+    return Response.json(
+      { error: "verification_must_be_confirmed_by_browser_session", message: "只有浏览器执行器检测到真实登录会话后才能完成验证" },
+      { status: 409 },
+    );
   } else if (body.action === "cancel") {
     status = "cancelled";
     message = "申请任务已取消";
