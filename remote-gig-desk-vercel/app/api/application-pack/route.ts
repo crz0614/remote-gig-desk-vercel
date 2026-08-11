@@ -33,11 +33,11 @@ export async function POST(request: Request) {
   if (!token) return Response.json({ error: "ai_not_configured" }, { status: 503 });
   const directOpenAI = Boolean(process.env.OPENAI_API_KEY && !process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL_OIDC_TOKEN);
   const endpoint = directOpenAI ? "https://api.openai.com/v1/chat/completions" : "https://ai-gateway.vercel.sh/v1/chat/completions";
-  const model = directOpenAI ? (process.env.APPLICATION_AI_MODEL || "gpt-5-mini") : (process.env.APPLICATION_AI_MODEL || "openai/gpt-5-mini");
+  const model = directOpenAI ? (process.env.APPLICATION_AI_MODEL || "gpt-5.6-luna") : (process.env.APPLICATION_AI_MODEL || "openai/gpt-5.6-luna");
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, messages: [{ role: "user", content: buildApplicationPrompt({ gig: body.gig, profile, portfolio }) }], response_format: { type: "json_object" } }),
+    body: JSON.stringify({ model, messages: [{ role: "user", content: buildApplicationPrompt({ gig: body.gig, profile, portfolio }) }], response_format: { type: "json_schema", json_schema: { name: "application_pack", strict: true, schema: { type: "object", properties: { language: { type: "string", enum: ["en", "zh"] }, quote: { type: "string" }, matchedSkills: { type: "array", items: { type: "string" } }, resume: { type: "array", items: { type: "string" } }, coverLetter: { type: "string" }, workMode: { type: "string" }, strategy: { type: "string", enum: ["github_comment", "email", "application_letter"] } }, required: ["language", "quote", "matchedSkills", "resume", "coverLetter", "workMode", "strategy"], additionalProperties: false } } } }),
   });
   if (!response.ok) {
     const detail = await response.text();
