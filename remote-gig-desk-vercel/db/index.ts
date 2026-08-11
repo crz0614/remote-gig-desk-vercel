@@ -34,6 +34,12 @@ export function ensureDatabase() {
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS lease_expires_at BIGINT`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0`,
       sql`ALTER TABLE applications ADD COLUMN IF NOT EXISTS evidence JSONB NOT NULL DEFAULT '{}'::jsonb`,
+      sql`CREATE TABLE IF NOT EXISTS application_attachments (
+        id TEXT PRIMARY KEY, owner_email TEXT NOT NULL, filename TEXT NOT NULL,
+        content_type TEXT NOT NULL, content BYTEA NOT NULL, size INTEGER NOT NULL,
+        created_at BIGINT NOT NULL
+      )`,
+      sql`CREATE INDEX IF NOT EXISTS application_attachments_owner_idx ON application_attachments(owner_email, created_at DESC)`,
       sql`UPDATE applications SET platform_key=lower(regexp_replace(source, ${"[^a-zA-Z0-9]+"}, ${""}, ${"g"})) WHERE platform_key IS NULL OR platform_key=${""}`,
       sql`CREATE INDEX IF NOT EXISTS applications_owner_idx ON applications(owner_email, updated_at DESC)`,
       sql`CREATE INDEX IF NOT EXISTS applications_platform_idx ON applications(owner_email, platform_key, updated_at DESC)`,

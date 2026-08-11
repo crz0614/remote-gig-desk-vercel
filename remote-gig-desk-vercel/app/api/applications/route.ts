@@ -3,6 +3,7 @@ import { db, ensureDatabase } from "../../../db";
 import { unseal } from "../../../lib/secret-store";
 import { getGoogleToken } from "../../../lib/google";
 import { applicationStateForSession, detectFinalApplicationUrl, platformKeyForUrl } from "../../../lib/application-url";
+import { buildResumeDocx } from "../../../lib/resume-docx";
 
 function platformKey(source:string){return source.toLowerCase().replace(/[^a-z0-9]+/g,"")||"unknown";}
 
@@ -53,6 +54,7 @@ export async function GET(){
   if(!user)return Response.json({error:"sign_in_required"},{status:401});
   await ensureDatabase();
   const sql=db();
+
   const rows=await sql`SELECT id,gig_id AS "gigId",title,source,source_url AS "sourceUrl",application_url AS "applicationUrl",status,delivery_channel AS "deliveryChannel",proposed_rate AS "proposedRate",destination,last_error AS "lastError",platform_key AS "platformKey",delivery_state AS "deliveryState",receipt_id AS "receiptId",receipt_url AS "receiptUrl",delivered_at AS "deliveredAt",materials,created_at AS "createdAt",updated_at AS "updatedAt" FROM applications WHERE owner_email=${user.email} ORDER BY updated_at DESC LIMIT 100`;
   const events=await sql`SELECT id,application_id AS "applicationId",event_type AS "eventType",status,message,evidence_id AS "evidenceId",evidence_url AS "evidenceUrl",created_at AS "createdAt" FROM application_events WHERE owner_email=${user.email} ORDER BY created_at ASC`;
   const replies=await sql`SELECT id,application_id AS "applicationId",subject,status,tone,summary,translation,next_action AS "next",gmail_url AS "gmailUrl",received_at AS "receivedAt" FROM email_replies WHERE owner_email=${user.email} AND application_id IS NOT NULL ORDER BY received_at DESC`;
@@ -80,6 +82,21 @@ export async function POST(request:Request){
     return Response.json({id:row.id,status:row.status,deliveryChannel:row.deliveryChannel,createdAt:row.createdAt,duplicate:true});
   }
 
+  const requestedAttachmentIds=Array.isArray(body.attachmentIds)?body.attachmentIds.map(String).slice(0,5):[];
+  if(!requestedAttachmentIds.length){
+    const profiles=await sql`SELECT profile_ciphertext AS "profileCiphertext" FROM private_profiles WHERE owner_email=${user.email} LIMIT 1`;
+    if((profiles[0] as any)?.profileCiphertext){
+      try{
+        const profile=JSON.parse(await unseal(String((profiles[0] as any).profileCiphertext))) as Record<string,unknown>;
+        const content=await buildResumeDocx(profile),attachmentId=crypto.randomUUID();
+        await sql`INSERT INTO application_attachments(id,owner_email,filename,content_type,content,size,created_at) VALUES(${attachmentId},${user.email},${"Ruozhu-Chen-Resume.docx"},${"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},${content},${content.length},${now})`;
+        requestedAttachmentIds.push(attachmentId);
+      }catch(error){console.error("automatic_resume_generation_failed",error);}
+    }
+  }
+  const attachmentRows=requestedAttachmentIds.length?await sql`SELECT id,filename AS name,content_type AS type,size FROM application_attachments WHERE owner_email=${user.email} AND id=ANY(${requestedAttachmentIds})`:[];
+  if(attachmentRows.length!==requestedAttachmentIds.length)return Response.json({error:"attachment_not_found"},{status:400});
+
   const finalApplicationUrl=detectFinalApplicationUrl([body.gig.applicationUrl,body.gig.application,body.gig.fullText,body.gig.summary],body.gig.sourceUrl);
   let status=channel==="github"?"awaiting_github_authorization":"detecting_destination";
   let deliveryError="";
@@ -98,7 +115,7 @@ export async function POST(request:Request){
     coverLetter:String(body.coverLetter||""),
     workMode:String(body.workMode||""),
     portfolioUrls:Array.isArray(body.portfolioUrls)?body.portfolioUrls.map(String).filter((value:string)=>/^https?:\/\//.test(value)).slice(0,10):[],
-    attachments:Array.isArray(body.attachments)?body.attachments.map(String).slice(0,20):[],
+    attachments:(attachmentRows as any[]).map(item=>({id:item.id,name:item.name,type:item.type,size:item.size})),
     generatedAt:now,
   });
 

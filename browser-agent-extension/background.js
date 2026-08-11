@@ -7,7 +7,7 @@ async function report(headers,action,taskId,extra={}){
   return result;
 }
 
-function fillApplication(task){
+async function fillApplication(task,agentToken){
   const visible=element=>Boolean(element.offsetWidth||element.offsetHeight||element.getClientRects().length);
   const provider=/greenhouse\.io$/i.test(location.hostname)?"greenhouse":/lever\.co$/i.test(location.hostname)?"lever":/ashbyhq\.com$/i.test(location.hostname)?"ashby":/workable\.com$/i.test(location.hostname)?"workable":"custom";
   const providerRoots={greenhouse:"#application_form,form",lever:"form.application-form,form",ashby:'form,[data-testid*="application"]',workable:'form,[data-ui="application-form"]',custom:"form"};
@@ -30,7 +30,21 @@ function fillApplication(task){
     const setter=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input),"value")?.set;
     setter?.call(input,value);input.dispatchEvent(new Event("input",{bubbles:true}));input.dispatchEvent(new Event("change",{bubbles:true}));filledFields++;
   }
-  return {filledFields,protectedCheckpoint,url:location.href,provider};
+  let uploadedAttachments=0;
+  const fileInputs=[...root.querySelectorAll('input[type="file"]')];
+  for(const attachment of task.attachments||[]){
+    const target=fileInputs.find(input=>{
+      const hint=[input.name,input.id,input.getAttribute("aria-label"),input.accept].filter(Boolean).join(" ");
+      return /resume|cv|attachment|upload/i.test(hint)&&(!input.files||input.files.length===0);
+    })||fileInputs.find(input=>!input.files||input.files.length===0);
+    if(!target)break;
+    const response=await fetch(attachment.url,{headers:{Authorization:"Bearer "+agentToken}});
+    if(!response.ok)continue;
+    const file=new File([await response.arrayBuffer()],attachment.name,{type:attachment.type});
+    const transfer=new DataTransfer();transfer.items.add(file);target.files=transfer.files;
+    target.dispatchEvent(new Event("input",{bubbles:true}));target.dispatchEvent(new Event("change",{bubbles:true}));uploadedAttachments++;
+  }
+  return {filledFields,uploadedAttachments,protectedCheckpoint,url:location.href,provider};
 }
 
 function prepareSubmission(){
@@ -76,7 +90,7 @@ async function runNextTask(headers,tasks){
     if(taskTabs[task.id])tab=await chrome.tabs.get(taskTabs[task.id]).catch(()=>null);
     if(!tab){tab=await chrome.tabs.create({url:target,active:false});taskTabs[task.id]=tab.id;await chrome.storage.local.set({taskTabs});}
     await new Promise(resolve=>setTimeout(resolve,5000));
-    const injection=await chrome.scripting.executeScript({target:{tabId:tab.id},func:fillApplication,args:[task]});
+    const injection=await chrome.scripting.executeScript({target:{tabId:tab.id},func:fillApplication,args:[task,headers.Authorization.slice(7)]});
     const result=injection[0]?.result||{filledFields:0,protectedCheckpoint:false};
     if(result.protectedCheckpoint){await chrome.tabs.update(tab.id,{active:true});await report(headers,"verification_required",task.id,result);return;}
     if(result.provider&&result.provider!=="custom"){
