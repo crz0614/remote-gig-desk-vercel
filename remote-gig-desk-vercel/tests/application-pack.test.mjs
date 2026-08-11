@@ -9,10 +9,12 @@ test("requires durable private applicant evidence", () => {
 });
 
 test("prompt forbids copying, invention and internal placeholders", () => {
-  const prompt = buildApplicationPrompt({ gig: { title: "React project" }, profile: { skills: "React" }, portfolio: [] });
+  const prompt = buildApplicationPrompt({ gig: { title: "React project",fullText:"Complete posting with deliverables, constraints, required skills, and final application instructions." }, profile: { skills: "React" }, portfolio: [] });
   assert.match(prompt, /do not copy/i);
   assert.match(prompt, /Never invent/i);
   assert.match(prompt, /select a project later/i);
+  assert.match(prompt,/FULL EMPLOYER POSTING TEXT/);
+  assert.match(prompt,/requirementMatches/);
 });
 
 test("keeps the confirmed systems capability library available for matching", async () => {
@@ -28,6 +30,7 @@ test("rejects old placeholder letters", () => {
 });
 
 test("accepts a complete AI pack", () => {
-  const pack = validateApplicationPack({ language: "en", quote: "Negotiable", matchedSkills: ["React"], resume: ["Built an accessible dashboard"], workMode: "Remote", coverLetter: "I can help deliver the dashboard by starting with the interaction model and accessibility acceptance criteria, then implementing focused React components with regression coverage. My portfolio includes a relevant interface project with evidence of my contribution." });
+  const pack = validateApplicationPack({ language: "en", quote: "Negotiable", employerSummary:"The client needs an accessible React dashboard, a clear interaction model, tested components, API integration, and documented delivery constraints. The posting also specifies remote collaboration and a review process.",requirementMatches:[{requirement:"Build an accessible React dashboard",advantage:"Production React and accessibility implementation",evidence:"Built an accessible dashboard with regression coverage"},{requirement:"Integrate the dashboard with APIs",advantage:"API integration and error-state modelling",evidence:"Remote Gig Desk integrates multiple production APIs"}],matchedSkills: ["React","API integration"], resume: ["Built an accessible dashboard"], workMode: "Remote", coverLetter: "I can help deliver the dashboard by starting with the interaction model and accessibility acceptance criteria, then implementing focused React components with regression coverage. My Remote Gig Desk project demonstrates production API integration, explicit error states, and evidence-based delivery rather than placeholder UI. I would apply the same approach to your dashboard and validate the required user flows before handoff." });
   assert.equal(pack.matchedSkills[0], "React");
+  assert.equal(pack.requirementMatches.length,2);
 });
