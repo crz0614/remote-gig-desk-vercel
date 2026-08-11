@@ -95,7 +95,15 @@ svg {
 .live-source-bar span {
   display: flex;
   gap: 4px;
+  min-width: 0;
+  max-width: 76%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
 }
+.live-source-bar span::-webkit-scrollbar { display: none; }
 .live-source-bar em {
   font-size: 7px;
   font-style: normal;
@@ -255,6 +263,23 @@ svg {
   display: block;
   font-size: 18px;
 }
+.market-board {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: -8px 2px 15px;
+}
+.market-board button {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+  padding: 11px 7px;
+  color: var(--ink);
+}
+.market-board button.active { background: #e4f5ed; border-color: #94d2b8; color: #087551; }
+.market-board b,.market-board span { display: block; }
+.market-board b { font-size: 16px; }
+.market-board span { margin-top: 3px; font-size: 9px; }
 .quick-stats span {
   font-size: 10px;
   color: var(--muted);
