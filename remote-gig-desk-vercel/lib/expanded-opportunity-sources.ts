@@ -132,25 +132,33 @@ async function html(url: string) {
   return response.text();
 }
 
+async function hydrateLinks(items:{url:string;label:string;context:string}[]){
+  const results=await Promise.allSettled(items.map(async item=>{
+    const page=text(await html(item.url));
+    return {...item,description:page.length>=item.context.length?page:item.context};
+  }));
+  return results.map((result,index)=>result.status==="fulfilled"?result.value:{...items[index],description:items[index].context});
+}
+
 export async function getYC(): Promise<ExpandedGig[]> {
   const url = "https://www.ycombinator.com/jobs/role/all/remote";
   const links = extractLinks(await html(url), url, /(?:ycombinator\.com|workatastartup\.com)\/(?:jobs|companies)\//i);
-  return links.filter(x => x.label.length > 4 && relevant(`${x.label} ${x.context}`)).slice(0, 12)
-    .map((x, i) => gig({ id:`yc-${i}-${encodeURIComponent(x.url).slice(-24)}`, title:x.label, source:"Y Combinator · 远程岗位", url:x.url, description:x.context, location:"Remote" }));
+  const selected=links.filter(x => x.label.length > 4 && relevant(`${x.label} ${x.context}`)).slice(0, 12),detailed=await hydrateLinks(selected);
+  return detailed.map((x, i) => gig({ id:`yc-${i}-${encodeURIComponent(x.url).slice(-24)}`, title:x.label, source:"Y Combinator · 远程岗位", url:x.url, description:x.description, location:"Remote" }));
 }
 
 export async function getWellfound(): Promise<ExpandedGig[]> {
   const url = "https://wellfound.com/jobs";
   const links = extractLinks(await html(url), url, /wellfound\.com\/jobs\/\d+-/i);
-  return links.filter(x => x.label.length > 4 && relevant(`${x.label} ${x.context}`)).slice(0, 12)
-    .map((x, i) => gig({ id:`wellfound-${i}-${x.url.match(/jobs\/(\d+)/)?.[1] || i}`, title:x.label, source:"Wellfound · 远程创业公司", url:x.url, description:x.context, location:"Remote" }));
+  const selected=links.filter(x => x.label.length > 4 && relevant(`${x.label} ${x.context}`)).slice(0, 12),detailed=await hydrateLinks(selected);
+  return detailed.map((x, i) => gig({ id:`wellfound-${i}-${x.url.match(/jobs\/(\d+)/)?.[1] || i}`, title:x.label, source:"Wellfound · 远程创业公司", url:x.url, description:x.description, location:"Remote" }));
 }
 
 export async function getCompanyCareers(): Promise<ExpandedGig[]> {
   const results = await Promise.allSettled(configuredCareers().map(async source => {
     const links = extractLinks(await html(source.url), source.url, /(?:job|career|position|opening|apply)/i);
-    return links.filter(x => x.label.length > 5 && relevant(`${x.label} ${x.context}`)).slice(0, 8)
-      .map((x, i) => gig({ id:`career-${source.company}-${i}`, title:x.label, company:source.company, source:`公司 Careers · ${source.company}`, url:x.url, description:x.context, location:"Remote" }));
+    const selected=links.filter(x => x.label.length > 5 && relevant(`${x.label} ${x.context}`)).slice(0, 8),detailed=await hydrateLinks(selected);
+    return detailed.map((x, i) => gig({ id:`career-${source.company}-${i}`, title:x.label, company:source.company, source:`公司 Careers · ${source.company}`, url:x.url, description:x.description, location:"Remote" }));
   }));
   return results.flatMap(result => result.status === "fulfilled" ? result.value : []);
 }
