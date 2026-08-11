@@ -255,6 +255,9 @@ export default function Home() {
     id: string;
     status: string;
     channel: string;
+    receiptUrl?: string;
+    receiptId?: string;
+    duplicate?: boolean;
   } | null>(null);
   const [batchResult, setBatchResult] = useState<{
     total: number;
@@ -568,9 +571,13 @@ export default function Home() {
         id: result.id,
         status: result.status,
         channel: result.deliveryChannel,
+        receiptUrl: result.receiptUrl,
+        receiptId: result.receiptId,
+        duplicate: result.duplicate === true,
       });
       setBatchPacks((v) => v.filter((x) => x.gig.id !== pack.gig.id));
       setChecked((v) => v.filter((id) => id !== pack.gig.id));
+      await loadBackend();
     } catch {
       setQueueNotice({ id: "", status: "queue_failed", channel: "none" });
     } finally {
@@ -1917,21 +1924,34 @@ export default function Home() {
               >
                 {queueNotice.status === "queue_failed"
                   ? "保存失败，请重试"
-                  : `任务已写入服务器 · ${queueNotice.channel} · ${queueNotice.status}`}
+                  : queueNotice.status === "submitted"
+                    ? queueNotice.duplicate
+                      ? `该岗位此前已经投递成功 · ${queueNotice.channel}`
+                      : `平台已确认接收申请 · ${queueNotice.channel}`
+                    : `申请任务已创建 · ${queueNotice.channel} · ${queueNotice.status}`}
                 {queueNotice.id && <small>任务编号：{queueNotice.id}</small>}
+                {queueNotice.receiptUrl ? (
+                  <a href={queueNotice.receiptUrl} target="_blank" rel="noreferrer">
+                    查看平台接收凭证 ↗
+                  </a>
+                ) : queueNotice.receiptId ? (
+                  <small>平台凭证编号：{queueNotice.receiptId}</small>
+                ) : null}
               </div>
             )}
-            <button
-              className="apply-button"
-              disabled={queueing}
-              onClick={() => confirmPack(applicationPack)}
-            >
-              {queueing
-                ? "正在写入服务器…"
-                : applicationPack.language === "en"
-                  ? "Approve and create application task"
-                  : "确认并创建申请任务"}
-            </button>
+            {queueNotice?.status !== "submitted" && (
+              <button
+                className="apply-button"
+                disabled={queueing}
+                onClick={() => confirmPack(applicationPack)}
+              >
+                {queueing
+                  ? "正在写入服务器…"
+                  : applicationPack.language === "en"
+                    ? "Approve and create application task"
+                    : "确认并创建申请任务"}
+              </button>
+            )}
             <a
               className="secondary-link"
               href={applicationPack.gig.sourceUrl}
