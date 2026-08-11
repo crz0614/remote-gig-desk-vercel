@@ -22,7 +22,7 @@ test("cloud browser sends protected steps to the human checkpoint queue",()=>{
 
 test("workbench starts at most one cloud task per five minute window",()=>{
   assert.match(page,/lastCloudSync/);
-  assert.match(page,/5\*60_000/);
+  assert.match(page,/5\s*\*\s*60_000/);
   assert.match(page,/cloudSyncInFlight/);
 });
 
