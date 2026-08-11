@@ -15,7 +15,8 @@ test("AI email analysis requires classification, full translation, summary and n
 
 test("private AI features use Gemini free tier structured output without billing providers",()=>{
   assert.match(ai,/generateFreeJson/);assert.match(applicationPack,/generateFreeJson/);
-  assert.match(freeAi,/gemini-2\.5-flash-lite/);
+  assert.match(freeAi,/gemini-3\.1-flash-lite/);
+  assert.match(freeAi,/response\.status!==404/);
   assert.match(freeAi,/responseJsonSchema/);
   for(const source of [ai,applicationPack,freeAi])assert.doesNotMatch(source,/AI_GATEWAY_API_KEY|VERCEL_OIDC_TOKEN|OPENAI_API_KEY|ai-gateway\.vercel/);
 });
