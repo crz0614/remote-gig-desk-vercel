@@ -2,6 +2,7 @@ import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
 import { unseal } from "../../../lib/secret-store";
 import { buildApplicationPrompt, hasUsableProfile, validateApplicationPack } from "../../../lib/application-pack";
+import { loadGitHubIssueContext } from "../../../lib/github-context";
 import { generateFreeJson } from "../../../lib/free-ai";
 
 export const maxDuration = 60;
@@ -27,8 +28,19 @@ export async function POST(request: Request) {
   }
   if (!hasUsableProfile(profile, portfolio)) return Response.json({ error: "profile_required" }, { status: 409 });
 
+  let githubContext = null;
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/\d+/i.test(String(body.gig.sourceUrl))) {
+    let githubToken: string | undefined;
+    const connections = await sql`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=${user.email} AND provider=${"github"} AND status=${"connected"} LIMIT 1`;
+    if ((connections[0] as any)?.tokenCiphertext) {
+      try { githubToken = await unseal(String((connections[0] as any).tokenCiphertext)); } catch {}
+    }
+    githubContext = await loadGitHubIssueContext(body.gig.sourceUrl, githubToken);
+    if (!githubContext?.issue) return Response.json({ error: "github_context_unavailable" }, { status: 502 });
+  }
+
   try {
-    const pack = validateApplicationPack(await generateFreeJson(buildApplicationPrompt({ gig: body.gig, profile, portfolio }),applicationPackSchema));
+    const pack = validateApplicationPack(await generateFreeJson(buildApplicationPrompt({ gig: { ...body.gig, githubContext }, profile, portfolio }),applicationPackSchema));
     return Response.json({ ...pack, gig: body.gig, generatedByAI: true });
   } catch (error) {
     console.error("application_pack_invalid", error);
