@@ -1,6 +1,5 @@
 import { getChatGPTUser } from "../../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../../db";
-import { unseal } from "../../../../lib/secret-store";
 import { getGoogleToken } from "../../../../lib/google";
 import { applicationStateForSession } from "../../../../lib/application-url";
 
@@ -40,16 +39,9 @@ export async function POST(request: Request) {
         const sent = await sendGmail(user.email, application.destination, "Application: " + application.title, application.applicationLetter);
         status = "submitted"; deliveryState = "platform_accepted"; receiptId = sent.id || ""; receiptUrl = sent.id ? `https://mail.google.com/mail/u/0/#sent/${sent.id}` : ""; deliveredAt = Date.now();
       } else if (application.deliveryChannel === "github") {
-        const target = String(application.sourceUrl).match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/i);
-        if (!target) throw new Error("github_target_invalid");
-        const connections = await sql`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=${user.email} AND provider=${"github"} AND status=${"connected"} LIMIT 1`;
-        const ciphertext = (connections[0] as any)?.tokenCiphertext;
-        if (!ciphertext) throw new Error("github_authorization_required");
-        const token = await unseal(ciphertext);
-        const response = await fetch(`https://api.github.com/repos/${target[1]}/${target[2]}/issues/${target[3]}/comments`, { method: "POST", headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28" }, body: JSON.stringify({ body: application.applicationLetter }), cache: "no-store" });
-        const posted = await response.json().catch(() => ({})) as { id?: number; html_url?: string };
-        if (!response.ok) throw new Error("github_" + response.status);
-        status = "submitted"; deliveryState = "platform_accepted"; receiptId = String(posted.id || ""); receiptUrl = posted.html_url || ""; deliveredAt = Date.now();
+        status = "deliverable_required";
+        deliveryState = "github_pr_required";
+        error = "github_pull_request_required";
       } else {
         const sessions = await sql`SELECT status,expires_at AS "expiresAt" FROM platform_sessions WHERE owner_email=${user.email} AND platform_key=${application.platformKey} LIMIT 1`;
         const next = applicationStateForSession(sessions[0] as any, Date.now());
