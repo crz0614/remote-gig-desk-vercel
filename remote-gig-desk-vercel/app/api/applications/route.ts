@@ -1,8 +1,8 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
-import { unseal } from "../../../lib/secret-store";
 import { getGoogleToken } from "../../../lib/google";
 import { applicationStateForSession, detectFinalApplicationUrl, platformKeyForUrl } from "../../../lib/application-url";
+import { githubDeliveryRequirement } from "../../../lib/github-delivery";
 import { buildResumeDocx } from "../../../lib/resume-docx";
 import { after } from "next/server";
 
@@ -148,25 +148,12 @@ export async function POST(request:Request){
   if(channel==="github"){
     const target=githubIssue(body.gig.sourceUrl);
     destination=target?body.gig.sourceUrl:destination;
-    const connections=await sql`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=${user.email} AND provider=${"github"} AND status=${"connected"} LIMIT 1`;
-    const tokenCiphertext=(connections[0] as any)?.tokenCiphertext as string|undefined;
-    if(target&&tokenCiphertext){
-      try{
-        const token=await unseal(tokenCiphertext);
-        const response=await fetch(`https://api.github.com/repos/${target.owner}/${target.repo}/issues/${target.issue}/comments`,{
-          method:"POST",
-          headers:{Authorization:`Bearer ${token}`,Accept:"application/vnd.github+json","Content-Type":"application/json","X-GitHub-Api-Version":"2022-11-28"},
-          body:JSON.stringify({body:body.coverLetter}),
-          cache:"no-store",
-        });
-        const result=await response.json().catch(()=>({})) as {id?:number;html_url?:string};
-        if(!response.ok)throw new Error(`github_${response.status}`);
-        status="submitted";deliveryState="platform_accepted";receiptId=String(result.id||"");receiptUrl=result.html_url||"";deliveredAt=Date.now();
-      }catch(error){
-        status="submission_failed";
-        deliveryError=error instanceof Error?error.message:"github_failed";
-      }
-    }
+    const requirement=githubDeliveryRequirement([body.gig.title,body.gig.application,body.gig.fullText,body.gig.summary].filter(Boolean).join("\n"));
+    status="deliverable_required";
+    deliveryState="github_pr_required";
+    deliveryError=requirement.requiredPaths.length
+      ? `必须先完成 ${requirement.requiredPaths.join(", ")} 并创建 Pull Request；禁止发送通用求职信`
+      : "必须先按 Issue 要求完成代码或文档并创建 Pull Request；禁止发送通用求职信";
   }else if(channel==="destination_detection"){
     const email=applicationEmail({...body,ownerEmail:user.email});
     if(email){
