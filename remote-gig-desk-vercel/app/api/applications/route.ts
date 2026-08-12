@@ -1,5 +1,6 @@
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { db, ensureDatabase } from "../../../db";
+import { unseal } from "../../../lib/secret-store";
 import { getGoogleToken } from "../../../lib/google";
 import { applicationStateForSession, detectFinalApplicationUrl, platformKeyForUrl } from "../../../lib/application-url";
 import { githubDeliveryRequirement } from "../../../lib/github-delivery";
