@@ -11,7 +11,7 @@ export function githubDeliveryRequirement(text: string): GitHubDeliveryRequireme
     match => match[1],
   ).slice(0, 20);
   const hardDelivery = requiredPaths.length > 0
-    || /(?:submit|open|create|send)\s+(?:a\s+)?(?:pull request|PR|patch)\b|(?:implement|fix|build|write|add)\b[\s\S]{0,120}\b(?:in a PR|and submit|then submit|ship the (?:code|file|patch))/i.test(source);
+    || /(?:submit|open|create|send)\s+(?:a\s+)?(?:pull request|PR|patch)\b|(?:implement|fix|build|write|add)\b[\s\S]{0,120}\b(?:in a PR|and submit|then submit|ship (?:it|the (?:code|file|patch)))/i.test(source);
   return { kind: hardDelivery ? "pull_request" : "proposal_comment", requiredPaths };
 }
 
