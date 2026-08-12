@@ -11,9 +11,8 @@ export function githubDeliveryRequirement(text: string): GitHubDeliveryRequireme
     match => match[1],
   ).slice(0, 20);
   const hardDelivery = requiredPaths.length > 0
-    || /(?:pull request|\bpr\b|implement|build|fix|add|create|write|submit|ship|commit|code|patch)/i.test(source);
-  const invitesProposal = /(?:proposal|propose|approach|design|idea|thoughts|discuss|claim|interested|plan|方向|方案|思路|认领|讨论|建议)/i.test(source);
-  return { kind: !hardDelivery && invitesProposal ? "proposal_comment" : "pull_request", requiredPaths };
+    || /(?:submit|open|create|send)\s+(?:a\s+)?(?:pull request|PR|patch)\b|(?:implement|fix|build|write|add)\b[\s\S]{0,120}\b(?:in a PR|and submit|then submit|ship the (?:code|file|patch))/i.test(source);
+  return { kind: hardDelivery ? "pull_request" : "proposal_comment", requiredPaths };
 }
 
 export function isTechnicalGitHubComment(value: string) {
