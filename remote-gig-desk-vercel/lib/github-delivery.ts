@@ -1,5 +1,5 @@
 export type GitHubDeliveryRequirement = {
-  kind: "pull_request" | "issue_comment";
+  kind: "pull_request" | "proposal_comment";
   requiredPaths: string[];
 };
 
@@ -10,7 +10,15 @@ export function githubDeliveryRequirement(text: string): GitHubDeliveryRequireme
     source.matchAll(/`((?:[\w.-]+\/)*[\w.-]+\.(?:md|txt|json|ya?ml|ts|tsx|js|jsx|py|go|rs|java|css|html))`/gi),
     match => match[1],
   ).slice(0, 20);
-  const commentOnly = /(?:reply|respond|answer|comment)\s+(?:only\s+)?(?:on|in|under)\s+(?:this\s+)?issue/i.test(source)
-    && !/(?:pull request|\bpr\b|implement|build|fix|add|create|write|submit|ship|commit|file|code|patch)/i.test(source);
-  return { kind: commentOnly ? "issue_comment" : "pull_request", requiredPaths };
+  const hardDelivery = requiredPaths.length > 0
+    || /(?:pull request|\bpr\b|implement|build|fix|add|create|write|submit|ship|commit|code|patch)/i.test(source);
+  const invitesProposal = /(?:proposal|propose|approach|design|idea|thoughts|discuss|claim|interested|plan|方向|方案|思路|认领|讨论|建议)/i.test(source);
+  return { kind: !hardDelivery && invitesProposal ? "proposal_comment" : "pull_request", requiredPaths };
+}
+
+export function isTechnicalGitHubComment(value: string) {
+  const text = String(value || "").trim();
+  if (text.length < 120) return false;
+  if (/(?:I am applying for|years of (?:hands-on )?experience|I am based|authori[sz]ed to work|expected rate|best regards|dear hiring)/i.test(text)) return false;
+  return /(?:implement|approach|design|milestone|acceptance|test|risk|trade-?off|module|file|API|architecture|方案|实现|验收|测试|风险|取舍|模块)/i.test(text);
 }
