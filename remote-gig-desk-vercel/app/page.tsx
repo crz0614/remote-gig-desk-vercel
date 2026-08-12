@@ -58,6 +58,7 @@ type ApplicationPack = {
   coverLetter: string;
   language: "en" | "zh";
   workMode: string;
+  strategy?: "github_comment" | "github_pull_request" | "email" | "application_letter";
 };
 type ChannelConnection = {
   id: string;
