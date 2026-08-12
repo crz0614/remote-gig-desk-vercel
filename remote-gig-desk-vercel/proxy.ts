@@ -70,7 +70,7 @@ export async function proxy(request: NextRequest) {
       response.cookies.set(DEVICE_COOKIE, await createDeviceToken(deviceSecret), {
         httpOnly: true,
         secure: true,
-        sameSite: "strict",
+        sameSite: "lax",
         path: "/",
         maxAge: DEVICE_DAYS * 24 * 60 * 60,
       });
