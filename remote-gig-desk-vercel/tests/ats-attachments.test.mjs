@@ -24,7 +24,7 @@ test("only the paired owner agent can download and inject application files",()=
 });
 
 test("protected checkpoints have a dedicated human takeover queue",()=>{
-  assert.match(page,/需要你接管的验证/);
+  assert.match(page,/需要登录或验证的平台/);
   assert.match(page,/verification_required/);
-  assert.match(page,/验证码、MFA、身份确认/);
+  assert.match(page,/验证码或 MFA/);
 });
