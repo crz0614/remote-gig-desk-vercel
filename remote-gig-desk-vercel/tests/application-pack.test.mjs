@@ -26,7 +26,7 @@ test("keeps the confirmed systems capability library available for matching", as
 });
 
 test("rejects old placeholder letters", () => {
-  assert.throws(() => validateApplicationPack({ language: "en", quote: "Negotiable", matchedSkills: ["React"], resume: ["Built UI"], workMode: "Remote", coverLetter: "A verified project example will be selected from the private profile before submission. This is placeholder text." }));
+  assert.throws(() => validateApplicationPack({ language: "en", quote: "Negotiable", matchedSkills: ["React"], resume: ["Built UI"], workMode: "Remote", decisionReason: "A normal web application is the explicit submission route.", coverLetter: "A verified project example will be selected from the private profile before submission. This is placeholder text." }));
 });
 
 test("accepts a complete AI pack", () => {
