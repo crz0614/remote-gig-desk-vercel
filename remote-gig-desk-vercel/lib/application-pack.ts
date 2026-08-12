@@ -76,7 +76,7 @@ matchedSkills: 2-5 short strings supported by the private data and relevant to t
 resume: 1-3 concise evidence-based highlights supported by the private data,
 coverLetter: the final text ready to send,
 workMode: a short factual work arrangement,
-strategy: "github_comment", "github_pull_request", "email", or "application_letter".
+strategy: "github_comment", "github_pull_request", "email", or "application_letter",\ndecisionReason: one concise explanation of why this next action fits this exact opportunity and repository.
 
 Rules:
 - Analyse the actual deliverables and respond to them; do not copy or paraphrase the job description as the letter.
@@ -86,7 +86,10 @@ Rules:
 - Select only the most relevant evidence. Never dump every skill into every application.
 - Never invent employers, years, projects, metrics, locations, work authorisation, degrees, links, rates, or availability.
 - Do not write internal notes such as "select a project later", "to be confirmed from the private profile", "verified project will be selected", or "Applicant" as a signature.
-- A GitHub issue/bounty needs a short technical comment with a concrete understanding and implementation direction, not a conventional cover letter.
+- For GitHub, read githubContext.issue, README, CONTRIBUTING and rootFiles before deciding the next action. Do not decide from title keywords alone.
+- A GitHub response must be specific to the repository and exact problem. It may be a bounded insight, diagnosis, contribution proposal, clarifying question, or implementation plan—choose what the maintainer actually needs. Do not force every response into the same checklist or template.
+- Preserve the successful bounded-contribution pattern: accurately acknowledge the maintainer's current boundary, propose one immediately useful and limited contribution, and stop before claiming work that was not requested or completed.
+- A GitHub response must not contain résumé, location, work-authorisation, generic self-promotion, rate, salutation, or the applicant's GitHub profile link unless the maintainer explicitly asks for them.
 - For a non-GitHub email or web application, include https://github.com/crz0614 naturally once as the applicant's verified code profile.
 - For GitHub, use strategy "github_comment" only when the issue invites a proposal, approach, discussion or claim before implementation. If it requests a file, code, patch or pull request, use strategy "github_pull_request" and do not write an application comment.
 - Keep normal letters natural and specific, usually 120-220 words in English or 180-350 Chinese characters.
@@ -106,7 +109,11 @@ export function validateApplicationPack(value: unknown) {
   const matchedSkills = Array.isArray(item.matchedSkills) ? item.matchedSkills.filter(x => typeof x === "string").map(String).slice(0, 5) : [];
   const resume = Array.isArray(item.resume) ? item.resume.filter(x => typeof x === "string").map(String).slice(0, 3) : [];
   const strategy = item.strategy === "github_comment" || item.strategy === "github_pull_request" || item.strategy === "email" || item.strategy === "application_letter" ? item.strategy : "application_letter";
-  const forbidden = /select a verifiable|selected from the private profile|to be confirmed from the private profile|相关项目证据将从私有资料|待从私有资料/i;
-  if (!language || !quote || employerSummary.length<80 || requirementMatches.length<2 || !coverLetter || coverLetter.length < 160 || !workMode || matchedSkills.length<2 || !resume.length || forbidden.test(coverLetter)) throw new Error("invalid_ai_response");
-  return { language, quote, employerSummary, requirementMatches, coverLetter, workMode, matchedSkills, resume, strategy };
+  const decisionReason = typeof item.decisionReason === "string" ? item.decisionReason.trim() : "";\n  const forbidden = /select a verifiable|selected from the private profile|to be confirmed from the private profile|相关项目证据将从私有资料|待从私有资料/i;
+  const githubStrategy = strategy === "github_comment" || strategy === "github_pull_request";
+  const validShape = githubStrategy
+    ? employerSummary.length >= 50 && coverLetter.length >= 120 && matchedSkills.length >= 1
+    : employerSummary.length >= 80 && requirementMatches.length >= 2 && coverLetter.length >= 160 && matchedSkills.length >= 2 && resume.length >= 1;
+  if (!language || !quote || !workMode || !decisionReason || !validShape || forbidden.test(coverLetter)) throw new Error("invalid_ai_response");
+  return { language, quote, employerSummary, requirementMatches, coverLetter, workMode, matchedSkills, resume, strategy, decisionReason };
 }
