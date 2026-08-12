@@ -62,7 +62,8 @@ ${JSON.stringify(input.profile || {})}
 PRIVATE VERIFIED PORTFOLIO ITEMS (the only allowed source of project claims):
 ${JSON.stringify(input.portfolio)}
 
-VERIFIED APPLICANT GITHUB PROFILE:\nhttps://github.com/crz0614
+VERIFIED APPLICANT GITHUB PROFILE:
+https://github.com/crz0614
 
 Product capability library, usable only when also supported by the private profile or portfolio:
 ${requirementCapabilities.join(", ")}
@@ -76,7 +77,8 @@ matchedSkills: 2-5 short strings supported by the private data and relevant to t
 resume: 1-3 concise evidence-based highlights supported by the private data,
 coverLetter: the final text ready to send,
 workMode: a short factual work arrangement,
-strategy: "github_comment", "github_pull_request", "email", or "application_letter",\ndecisionReason: one concise explanation of why this next action fits this exact opportunity and repository.
+strategy: "github_comment", "github_pull_request", "email", or "application_letter",
+decisionReason: one concise explanation of why this next action fits this exact opportunity and repository.
 
 Rules:
 - Analyse the actual deliverables and respond to them; do not copy or paraphrase the job description as the letter.
@@ -109,7 +111,8 @@ export function validateApplicationPack(value: unknown) {
   const matchedSkills = Array.isArray(item.matchedSkills) ? item.matchedSkills.filter(x => typeof x === "string").map(String).slice(0, 5) : [];
   const resume = Array.isArray(item.resume) ? item.resume.filter(x => typeof x === "string").map(String).slice(0, 3) : [];
   const strategy = item.strategy === "github_comment" || item.strategy === "github_pull_request" || item.strategy === "email" || item.strategy === "application_letter" ? item.strategy : "application_letter";
-  const decisionReason = typeof item.decisionReason === "string" ? item.decisionReason.trim() : "";\n  const forbidden = /select a verifiable|selected from the private profile|to be confirmed from the private profile|相关项目证据将从私有资料|待从私有资料/i;
+  const decisionReason = typeof item.decisionReason === "string" ? item.decisionReason.trim() : "";
+  const forbidden = /select a verifiable|selected from the private profile|to be confirmed from the private profile|相关项目证据将从私有资料|待从私有资料/i;
   const githubStrategy = strategy === "github_comment" || strategy === "github_pull_request";
   const validShape = githubStrategy
     ? employerSummary.length >= 50 && coverLetter.length >= 120 && matchedSkills.length >= 1
