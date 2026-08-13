@@ -141,6 +141,14 @@ type ApplicationRecord = {
     workMode?: string;
     portfolioUrls?: string[];
     attachments?: string[];
+    githubDelivery?: {
+      strategy?: string;
+      requirement?: string;
+      requiredPaths?: string[];
+      repository?: string;
+      issueNumber?: number | null;
+      issueUrl?: string;
+    };
   };
   events?: ApplicationEvent[];
   replies?: ApplicationReply[];
@@ -1112,6 +1120,8 @@ export default function Home() {
                   form_ready: "表单已填写",
                   detecting_destination: "正在识别投递入口",
                   awaiting_github_authorization: "等待 GitHub 授权",
+                  deliverable_required: "等待真实 PR 交付",
+                  proposal_sent: "GitHub 方案已发送",
                   submission_failed: "投递失败",
                   verification_required: "同平台等待一次验证",
                   cancelled: "已取消",
@@ -1142,7 +1152,19 @@ export default function Home() {
                               text: "浏览器已完成已知字段填写，等待受保护确认或提交回执。",
                               tone: "session",
                             }
-                          : null;
+                          : app.deliveryState === "github_pr_required"
+                            ? {
+                                title: "必须完成真实 Pull Request",
+                                text: "此任务要求先修改目标仓库并通过测试；系统不会用通用评论冒充交付。只有记录可核验的 PR 链接后才能完成。",
+                                tone: "action",
+                              }
+                            : app.deliveryState === "github_proposal_sent"
+                              ? {
+                                  title: "GitHub 已返回评论回执",
+                                  text: "已按项目上下文发送技术方案；这表示方案已送达，不代表维护者已经接受。",
+                                  tone: "accepted",
+                                }
+                              : null;
                 return (
                   <article className="gig-card application-record" key={app.id}>
                     <div className="card-top">
@@ -1183,6 +1205,24 @@ export default function Home() {
                       </div>
                     </div>
                     <p className="application-note">任务编号：{app.id}</p>
+                    {app.materials?.githubDelivery?.requirement === "pull_request" && (
+                      <div className="task-proof action">
+                        <b>GitHub 交付任务</b>
+                        <p>
+                          {app.materials.githubDelivery.repository
+                            ? `目标仓库：${app.materials.githubDelivery.repository}`
+                            : "目标仓库需从 Issue 确认"}
+                          {app.materials.githubDelivery.issueNumber
+                            ? ` · Issue #${app.materials.githubDelivery.issueNumber}`
+                            : ""}
+                        </p>
+                        {app.materials.githubDelivery.requiredPaths?.length ? (
+                          <small>必须交付：{app.materials.githubDelivery.requiredPaths.join("、")}</small>
+                        ) : (
+                          <small>必须按 Issue 要求完成代码或文档并创建 Pull Request</small>
+                        )}
+                      </div>
+                    )}
                     {app.materials?.matchedSkills?.length && (
                       <>
                         <h4 className="timeline-title">实际采用的匹配能力</h4>
@@ -1232,7 +1272,7 @@ export default function Home() {
                         平台队列：{app.platformKey} · 同平台只验证一次
                       </p>
                     )}
-                    {app.lastError && (
+                    {app.lastError && app.deliveryState !== "github_pr_required" && (
                       <p className="application-error">
                         失败原因：{app.lastError}
                       </p>

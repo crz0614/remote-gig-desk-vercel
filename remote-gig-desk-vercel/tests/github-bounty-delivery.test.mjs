@@ -21,5 +21,16 @@ test("application endpoints gate GitHub comments and never retry them as generic
   assert.match(createRoute, /requirement\.kind==="proposal_comment"/);
   assert.doesNotMatch(retryRoute, /issues\/\$\{target\[3\]\}\/comments/);
   assert.match(createRoute, /github_pr_required/);
+  assert.match(createRoute, /githubDelivery:githubRequirement/);
+  assert.match(createRoute, /GITHUB_DELIVERABLE_REQUIRED/);
   assert.match(retryRoute, /github_pull_request_required/);
+  assert.match(retryRoute, /重试不会发送通用评论/);
+});
+
+test("progress UI distinguishes a required PR from a failed application", () => {
+  const page = fs.readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /deliverable_required: "等待真实 PR 交付"/);
+  assert.match(page, /必须完成真实 Pull Request/);
+  assert.match(page, /requiredPaths\.join\("、"\)/);
+  assert.match(page, /app\.deliveryState !== "github_pr_required"/);
 });

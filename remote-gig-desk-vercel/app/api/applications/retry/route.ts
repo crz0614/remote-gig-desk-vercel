@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     } catch (cause) { error = cause instanceof Error ? cause.message : "submission_failed"; }
     const now = Date.now();
     await sql`UPDATE applications SET status=${status},delivery_state=${deliveryState},receipt_id=${receiptId},receipt_url=${receiptUrl},delivered_at=${deliveredAt},last_error=${error},updated_at=${now} WHERE id=${application.id} AND owner_email=${user.email}`;
-    const message = deliveryState === "platform_accepted" ? "平台接口已确认接收申请并返回回执" : deliveryState === "session_reused" ? "已复用平台会话，任务重新进入浏览器执行队列" : status === "verification_required" ? "等待完成一次平台登录或验证码" : error ? "未获得平台接收回执：" + error : "任务状态已更新";
+    const message = deliveryState === "github_pr_required" ? "此任务必须完成真实代码或文档并创建 Pull Request；重试不会发送通用评论" : deliveryState === "platform_accepted" ? "平台接口已确认接收申请并返回回执" : deliveryState === "session_reused" ? "已复用平台会话，任务重新进入浏览器执行队列" : status === "verification_required" ? "等待完成一次平台登录或验证码" : error ? "未获得平台接收回执：" + error : "任务状态已更新";
     await sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${application.id},${"delivery_retry"},${status},${message},${receiptId},${receiptUrl},${now})`;
     await sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_retry"},${application.id},${error || status},${now})`;
     results.push({ id: application.id, status, deliveryState, receiptId, receiptUrl, error: error || undefined });
