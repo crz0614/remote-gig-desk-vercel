@@ -6,6 +6,7 @@ import { applicationStateForSession, detectFinalApplicationUrl, platformKeyForUr
 import { githubDeliveryRequirement, isTechnicalGitHubComment } from "../../../lib/github-delivery";
 import { buildResumeDocx } from "../../../lib/resume-docx";
 import { after } from "next/server";
+import { assessCompensation, requiresPaidDeliveryGate } from "../../../lib/compensation";
 
 export const maxDuration=300;
 
@@ -129,6 +130,7 @@ export async function POST(request:Request){
   const githubRequirement=channel==="github"
     ? githubDeliveryRequirement([body.gig.title,body.gig.application,body.gig.fullText,body.gig.summary].filter(Boolean).join("\n"))
     : null;
+  const compensation=assessCompensation(body.gig);
   const materials=JSON.stringify({
     version:1,
     language:String(body.language||""),
@@ -147,6 +149,7 @@ export async function POST(request:Request){
       issueNumber:githubTarget?Number(githubTarget.issue):null,
       issueUrl:String(body.gig.sourceUrl||""),
     }:undefined,
+    compensation,
     generatedAt:now,
   });
 
@@ -162,7 +165,11 @@ export async function POST(request:Request){
     const target=githubTarget;
     destination=target?body.gig.sourceUrl:destination;
     const requirement=githubRequirement!;
-    if(requirement.kind==="proposal_comment"&&body.strategy==="github_comment"&&isTechnicalGitHubComment(body.coverLetter)){
+    if(requiresPaidDeliveryGate(body.strategy,compensation)){
+      status="compensation_confirmation_required";
+      deliveryState="payment_unconfirmed";
+      deliveryError=compensation.state==="unpaid"?"原文明确为无偿贡献；系统不会自动投入交付":"付款金额或承诺尚未确认；确认付费后才能开始真实 PR 交付";
+    }else if(requirement.kind==="proposal_comment"&&body.strategy==="github_comment"&&isTechnicalGitHubComment(body.coverLetter)){
       const connections=await sql`SELECT token_ciphertext AS "tokenCiphertext" FROM channel_connections WHERE owner_email=${user.email} AND provider=${"github"} AND status=${"connected"} LIMIT 1`;
       const tokenCiphertext=(connections[0] as any)?.tokenCiphertext as string|undefined;
       if(target&&tokenCiphertext){
@@ -196,7 +203,7 @@ export async function POST(request:Request){
 
   await sql.transaction([
     sql`INSERT INTO applications (id,owner_email,gig_id,source,source_url,application_url,title,language,proposed_rate,application_letter,status,delivery_channel,destination,last_error,platform_key,delivery_state,receipt_id,receipt_url,delivered_at,materials,created_at,updated_at) VALUES (${id},${user.email},${body.gig.id},${body.gig.source},${body.gig.sourceUrl},${finalApplicationUrl},${body.gig.title},${body.language},${body.quote},${body.coverLetter},${status},${channel},${destination},${deliveryError},${platform},${deliveryState},${receiptId},${receiptUrl},${deliveredAt},${materials}::jsonb,${now},${now})`,
-    sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${id},${deliveryState==="github_pr_required"?"GITHUB_DELIVERABLE_REQUIRED":deliveryState==="github_proposal_sent"?"GITHUB_PROPOSAL_SENT":deliveryState==="session_reused"?"SESSION_REUSED":deliveryState==="verification_required"?"VERIFICATION_REQUIRED":"QUEUED"},${status},${deliveryState==="github_pr_required"?deliveryError:deliveryState==="github_proposal_sent"?"GitHub 已返回评论回执":deliveryState==="platform_accepted"?"平台接口已确认接收申请":deliveryState==="session_reused"?"已复用平台会话，任务进入浏览器执行队列":deliveryState==="verification_required"?"平台队列等待一次登录或验证":deliveryError?"投递失败："+deliveryError:"任务已建立，等待下一步"},${receiptId},${receiptUrl},${now})`,
+    sql`INSERT INTO application_events (id,owner_email,application_id,event_type,status,message,evidence_id,evidence_url,created_at) VALUES (${crypto.randomUUID()},${user.email},${id},${deliveryState==="payment_unconfirmed"?"COMPENSATION_CONFIRMATION_REQUIRED":deliveryState==="github_pr_required"?"GITHUB_DELIVERABLE_REQUIRED":deliveryState==="github_proposal_sent"?"GITHUB_PROPOSAL_SENT":deliveryState==="session_reused"?"SESSION_REUSED":deliveryState==="verification_required"?"VERIFICATION_REQUIRED":"QUEUED"},${status},${deliveryState==="payment_unconfirmed"?deliveryError:deliveryState==="github_pr_required"?deliveryError:deliveryState==="github_proposal_sent"?"GitHub 已返回评论回执":deliveryState==="platform_accepted"?"平台接口已确认接收申请":deliveryState==="session_reused"?"已复用平台会话，任务进入浏览器执行队列":deliveryState==="verification_required"?"平台队列等待一次登录或验证":deliveryError?"投递失败："+deliveryError:"任务已建立，等待下一步"},${receiptId},${receiptUrl},${now})`,
     sql`INSERT INTO audit_events (id,owner_email,action,target,result,created_at) VALUES (${crypto.randomUUID()},${user.email},${"application_processed"},${id},${deliveryError||status},${now})`,
   ]);
   if(status==="queued_for_browser"&&["greenhouse","lever","ashby","workable"].includes(platform)){

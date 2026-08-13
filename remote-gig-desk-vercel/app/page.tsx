@@ -59,6 +59,8 @@ type ApplicationPack = {
   language: "en" | "zh";
   workMode: string;
   strategy?: "github_comment" | "github_pull_request" | "email" | "application_letter";
+  decisionReason?: string;
+  compensation: { state: "confirmed_paid" | "payment_unconfirmed" | "unpaid"; evidence: string };
 };
 type ChannelConnection = {
   id: string;
@@ -149,6 +151,7 @@ type ApplicationRecord = {
       issueNumber?: number | null;
       issueUrl?: string;
     };
+    compensation?: { state: "confirmed_paid" | "payment_unconfirmed" | "unpaid"; evidence: string };
   };
   events?: ApplicationEvent[];
   replies?: ApplicationReply[];
@@ -1121,6 +1124,7 @@ export default function Home() {
                   detecting_destination: "正在识别投递入口",
                   awaiting_github_authorization: "等待 GitHub 授权",
                   deliverable_required: "等待真实 PR 交付",
+                  compensation_confirmation_required: "等待确认付费",
                   proposal_sent: "GitHub 方案已发送",
                   submission_failed: "投递失败",
                   verification_required: "同平台等待一次验证",
@@ -1158,7 +1162,13 @@ export default function Home() {
                                 text: "此任务要求先修改目标仓库并通过测试；系统不会用通用评论冒充交付。只有记录可核验的 PR 链接后才能完成。",
                                 tone: "action",
                               }
-                            : app.deliveryState === "github_proposal_sent"
+                            : app.deliveryState === "payment_unconfirmed"
+                              ? {
+                                  title: "尚未确认能获得报酬",
+                                  text: "系统未找到可核验的付款承诺，因此不会开始代码或文档交付。回复、认可、PR 批准和合并都不等于付款。",
+                                  tone: "action",
+                                }
+                              : app.deliveryState === "github_proposal_sent"
                               ? {
                                   title: "GitHub 已返回评论回执",
                                   text: "已按项目上下文发送技术方案；这表示方案已送达，不代表维护者已经接受。",
@@ -2060,6 +2070,10 @@ export default function Home() {
                 <b>{applicationPack.workMode}</b>
               </div>
             </div>
+            <div className={`task-proof ${applicationPack.compensation.state === "confirmed_paid" ? "accepted" : "action"}`}>
+              <b>{applicationPack.compensation.state === "confirmed_paid" ? "已找到明确付费证据" : applicationPack.compensation.state === "unpaid" ? "明确无报酬" : "付款尚未确认"}</b>
+              <p>{applicationPack.compensation.evidence}</p>
+            </div>
             <h3>
               {applicationPack.language === "en"
                 ? "Relevant skills"
@@ -2115,11 +2129,13 @@ export default function Home() {
             {queueNotice?.status !== "submitted" && (
               <button
                 className="apply-button"
-                disabled={queueing}
+                disabled={queueing || (applicationPack.strategy === "github_pull_request" && applicationPack.compensation.state !== "confirmed_paid")}
                 onClick={() => confirmPack(applicationPack)}
               >
                 {queueing
                   ? "正在写入服务器…"
+                  : applicationPack.strategy === "github_pull_request" && applicationPack.compensation.state !== "confirmed_paid"
+                    ? "确认付费后才能开始 PR 交付"
                   : applicationPack.language === "en"
                     ? "Approve and create application task"
                     : "确认并创建申请任务"}

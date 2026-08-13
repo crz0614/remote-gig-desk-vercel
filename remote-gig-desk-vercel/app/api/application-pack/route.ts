@@ -4,10 +4,11 @@ import { unseal } from "../../../lib/secret-store";
 import { buildApplicationPrompt, hasUsableProfile, validateApplicationPack } from "../../../lib/application-pack";
 import { loadGitHubIssueContext } from "../../../lib/github-context";
 import { generateFreeJson } from "../../../lib/free-ai";
+import { assessCompensation } from "../../../lib/compensation";
 
 export const maxDuration = 60;
 
-const applicationPackSchema={type:"object",properties:{language:{type:"string",enum:["en","zh"]},quote:{type:"string"},employerSummary:{type:"string"},requirementMatches:{type:"array",items:{type:"object",properties:{requirement:{type:"string"},advantage:{type:"string"},evidence:{type:"string"}},required:["requirement","advantage","evidence"],additionalProperties:false}},matchedSkills:{type:"array",items:{type:"string"}},resume:{type:"array",items:{type:"string"}},coverLetter:{type:"string"},workMode:{type:"string"},strategy:{type:"string",enum:["github_comment","email","application_letter"]}},required:["language","quote","employerSummary","requirementMatches","matchedSkills","resume","coverLetter","workMode","strategy"],additionalProperties:false};
+const applicationPackSchema={type:"object",properties:{language:{type:"string",enum:["en","zh"]},quote:{type:"string"},employerSummary:{type:"string"},requirementMatches:{type:"array",items:{type:"object",properties:{requirement:{type:"string"},advantage:{type:"string"},evidence:{type:"string"}},required:["requirement","advantage","evidence"],additionalProperties:false}},matchedSkills:{type:"array",items:{type:"string"}},resume:{type:"array",items:{type:"string"}},coverLetter:{type:"string"},workMode:{type:"string"},strategy:{type:"string",enum:["github_comment","github_pull_request","email","application_letter"]},decisionReason:{type:"string"}},required:["language","quote","employerSummary","requirementMatches","matchedSkills","resume","coverLetter","workMode","strategy","decisionReason"],additionalProperties:false};
 
 export async function POST(request: Request) {
   const user = await getChatGPTUser();
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
   try {
     const pack = validateApplicationPack(await generateFreeJson(buildApplicationPrompt({ gig: { ...body.gig, githubContext }, profile, portfolio }),applicationPackSchema));
-    return Response.json({ ...pack, gig: body.gig, generatedByAI: true });
+    return Response.json({ ...pack, gig: body.gig, compensation: assessCompensation(body.gig), generatedByAI: true });
   } catch (error) {
     console.error("application_pack_invalid", error);
     return Response.json({ error: error instanceof Error&&error.message==="free_ai_not_configured"?"free_ai_not_configured":"ai_generation_failed" }, { status: error instanceof Error&&error.message==="free_ai_not_configured"?503:502 });
