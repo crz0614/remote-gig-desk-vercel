@@ -17,7 +17,7 @@ export function assertAuthorized(request: Request) {
 }
 
 export async function supabase(path: string, init: RequestInit = {}) {
-  const base = required("SUPABASE_URL").replace(/\/$/, "");
+  const base = (process.env.SUPABASE_URL || "https://hqxyjaepuaruiwdfvvqj.supabase.co").replace(/\/$/, "");
   const key = required("SUPABASE_SERVICE_ROLE_KEY");
   const response = await fetch(`${base}/rest/v1/${path}`, {
     ...init,
