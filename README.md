@@ -2,7 +2,7 @@
 
 A production-oriented application workbench that discovers actionable remote work, creates evidence-grounded application materials, submits through supported web/API channels, and tracks replies without claiming success before a real receipt exists.
 
-[Live workbench](https://remote-gig-desk-vercel.vercel.app/) · [Public portfolio](https://crz0614.github.io/ruozhu-portfolio/) · [Application source](./remote-gig-desk-vercel)
+[Live workbench](https://remote-gig-desk-vercel.vercel.app/) · [Public portfolio](https://crz0614.github.io/ruozhu-portfolio/) · [Source repository](https://github.com/crz0614/remote-gig-desk-vercel)
 
 > The live workbench is owner-authenticated because it contains private résumé, profile, email, and application data. This public repository contains code and tests only.
 
