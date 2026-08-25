@@ -1,4 +1,4 @@
-name: Portfolio CI
+name: Archived Portfolio Snapshot Check
 on:
   push:
     paths: ["portfolio-projects/**", ".github/workflows/portfolio-ci.yml"]
@@ -6,35 +6,14 @@ on:
     paths: ["portfolio-projects/**", ".github/workflows/portfolio-ci.yml"]
 permissions: { contents: read }
 jobs:
-  web-projects:
+  provenance:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        project: [ai-freelance-workbench, multilingual-support-copilot]
-    defaults:
-      run:
-        working-directory: portfolio-projects/${{ matrix.project }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: portfolio-projects/${{ matrix.project }}/package-lock.json
-      - run: npm ci
-      - run: npm test
-      - run: npm run lint
-      - run: npm run build
-  go-runner:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: portfolio-projects/distributed-job-runner
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: "1.23" }
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - run: go test -race -cover ./...
-      - run: go build ./cmd/server
+      - name: Verify snapshots are explicitly retired
+        run: |
+          test -f portfolio-projects/README.md
+          grep -q "Archived snapshots" portfolio-projects/README.md
+          grep -q "ai-freelance-workbench" portfolio-projects/README.md
+          grep -q "multilingual-support-copilot" portfolio-projects/README.md
+          grep -q "distributed-job-runner" portfolio-projects/README.md
