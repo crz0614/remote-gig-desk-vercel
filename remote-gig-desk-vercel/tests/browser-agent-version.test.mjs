@@ -8,7 +8,7 @@ const page=fs.readFileSync(new URL("../app/page.tsx",import.meta.url),"utf8");
 
 test("browser heartbeat reports its installed version",()=>{
   assert.match(extension,/agentVersion:chrome\.runtime\.getManifest\(\)\.version/);
-  assert.match(route,/updateRequired:agent\.version!==currentBrowserAgentVersion/);
+  assert.match(route,/updateRequired:agent\.version!==CURRENT_BROWSER_AGENT_VERSION/);
 });
 
 test("workbench downloads the standalone extension instead of the whole repository",()=>{
