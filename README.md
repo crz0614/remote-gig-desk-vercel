@@ -45,6 +45,8 @@ A production-oriented application workbench that discovers actionable remote wor
 - [browser-agent-extension/](./browser-agent-extension) — paired Chrome executor source
 - [browser-agent-extension-0.7.0.zip](./browser-agent-extension-0.7.0.zip) — current flat installation package
 
+Portfolio applications live in their own canonical repositories. Stale embedded copies are intentionally excluded so fixes, tests and deployment evidence have one authoritative source.
+
 ## Run locally
 
 ```bash

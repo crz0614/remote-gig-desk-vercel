@@ -1,4 +1,0 @@
-export type Ticket={id:string;author:string;avatar:string;subject:string;repository:string;sourceUrl:string;labels:string[];comments:number;createdAt:string;message:string;language:string;intent:string;priority:"urgent"|"normal"};
-export function inferLanguage(text:string){if(/[\u3040-\u30ff]/.test(text))return"Japanese";if(/[\u4e00-\u9fff]/.test(text))return"Chinese";if(/[а-яё]/i.test(text))return"Russian";return"Unverified / likely English"}
-export function inferIntent(labels:string[],title:string){const value=`${labels.join(" ")} ${title}`;if(/security|vulnerability/i.test(value))return"Security";if(/bug|error|crash|fail/i.test(value))return"Technical issue";if(/documentation|docs/i.test(value))return"Documentation";if(/feature|enhancement/i.test(value))return"Feature request";return"Needs triage"}
-export function priorityFor(labels:string[]){return labels.some(x=>/security|critical|urgent|priority.?0|p0/i.test(x))?"urgent" as const:"normal" as const}

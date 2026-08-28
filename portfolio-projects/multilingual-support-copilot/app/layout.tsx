@@ -1,1 +1,0 @@
-import type {Metadata} from "next";import "./globals.css";import "./truth.css";export const metadata:Metadata={title:"Relay — Public Issue Triage Copilot",description:"Truthful public-issue triage portfolio demo."};export default function Layout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}
