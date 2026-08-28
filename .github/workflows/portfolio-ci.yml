@@ -1,4 +1,4 @@
-name: Archived Portfolio Snapshot Check
+name: Canonical Portfolio Boundary
 on:
   push:
     paths: ["portfolio-projects/**", ".github/workflows/portfolio-ci.yml"]
@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Verify snapshots are explicitly retired
+      - name: Reject embedded copies of canonical repositories
         run: |
-          test -f portfolio-projects/README.md
-          grep -q "Archived snapshots" portfolio-projects/README.md
-          grep -q "ai-freelance-workbench" portfolio-projects/README.md
-          grep -q "multilingual-support-copilot" portfolio-projects/README.md
-          grep -q "distributed-job-runner" portfolio-projects/README.md
+          if find portfolio-projects -type f -print -quit 2>/dev/null | grep -q .; then
+            echo "Canonical portfolio projects must live in their own repositories."
+            find portfolio-projects -type f -print
+            exit 1
+          fi
