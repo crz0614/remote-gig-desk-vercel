@@ -6,6 +6,7 @@ import { browserTaskState } from "../../../lib/browser-task-state";
 import { applicantProfileForForms } from "../../../lib/applicant-profile";
 import { unseal } from "../../../lib/secret-store";
 import { validateSubmissionEvidence } from "../../../lib/submission-evidence";
+import { CURRENT_BROWSER_AGENT_VERSION } from "../../../lib/browser-agent-version";
 
 const channels=[
   {id:"github",name:"GitHub Issues / Bounties",mode:"direct",capability:"授权后可通过官方 API 发布申请评论",status:"authorization_required"},
@@ -19,7 +20,6 @@ const channels=[
   {id:"custom",name:"公司自建表单",mode:"browser",capability:"逐域名分析；验证码或身份验证需要人工处理",status:"manual_checkpoint"},
 ];
 // Proginn retries are limited to the exact missing-target failure.
-const currentBrowserAgentVersion="0.7.0";
 
 export async function GET(){
   const user=await getChatGPTUser();
@@ -57,8 +57,8 @@ export async function GET(){
     if(!existing||existing.status!=="connected")authenticated.set(session.platformKey,item);
   }
   const agents=await sql`SELECT id,name,status,version,last_seen_at AS "lastSeenAt",created_at AS "createdAt",updated_at AS "updatedAt" FROM browser_agents WHERE owner_email=${user.email} ORDER BY updated_at DESC`;
-  const browserAgents=(agents as any[]).map(agent=>({...agent,status:agent.lastSeenAt&&Date.now()-Number(agent.lastSeenAt)<120000?"online":"offline",updateRequired:agent.version!==currentBrowserAgentVersion}));
-  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents,currentBrowserAgentVersion});
+  const browserAgents=(agents as any[]).map(agent=>({...agent,status:agent.lastSeenAt&&Date.now()-Number(agent.lastSeenAt)<120000?"online":"offline",updateRequired:agent.version!==CURRENT_BROWSER_AGENT_VERSION}));
+  return Response.json({owner:user.email,channels:resolvedChannels,sessions,authenticatedSites:[...authenticated.values()],browserAgents,currentBrowserAgentVersion:CURRENT_BROWSER_AGENT_VERSION});
 }
 
 
@@ -113,7 +113,7 @@ export async function POST(request:Request){
       await sql`UPDATE applications SET status=${"queued_for_browser"},delivery_state=${"session_reused"},last_error=${""},updated_at=${now} WHERE owner_email=${agent.ownerEmail} AND platform_key=${platformKey} AND status=${"verification_required"}`;
       if(body.suppressTaskLease)return Response.json({ok:true,platformKey,status:"verified"},{headers:agentCors});
     }
-    if(body.action==="heartbeat"&&String(body.agentVersion||"")!==currentBrowserAgentVersion){
+    if(body.action==="heartbeat"&&String(body.agentVersion||"")!==CURRENT_BROWSER_AGENT_VERSION){
       return Response.json({ok:true,agentId:agent.id,heartbeatAt:now,tasks:[]},{headers:agentCors});
     }
     const leaseUntil=now+120000;
